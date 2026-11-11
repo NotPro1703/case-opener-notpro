@@ -212,20 +212,99 @@ export const CASES = {
       { amount: 20000000, chance: 18 }, { amount: 75000000, chance: 9.5 },
       { amount: 500000000, chance: 2.5, jackpot: true },
     ]
+  },
+
+  /* ==================== 10 НОВЫХ КЕЙСОВ (3.1) ==================== */
+  cyber: {
+    id: 'cyber', name: 'Киберпанк', icon: '🤖', price: 150000, reqLevel: 40,
+    drops: [
+      { amount: 20000, chance: 40 }, { amount: 60000, chance: 30 },
+      { amount: 150000, chance: 18 }, { amount: 400000, chance: 9 },
+      { amount: 1000000, chance: 2.5 }, { amount: 5000000, chance: 0.5, jackpot: true },
+    ]
+  },
+  dragon: {
+    id: 'dragon', name: 'Драконий', icon: '🐉', price: 300000, reqLevel: 50,
+    drops: [
+      { amount: 50000, chance: 42 }, { amount: 150000, chance: 28 },
+      { amount: 400000, chance: 18 }, { amount: 1200000, chance: 9 },
+      { amount: 4000000, chance: 2.5 }, { amount: 15000000, chance: 0.5, jackpot: true },
+    ]
+  },
+  space: {
+    id: 'space', name: 'Орбитальный', icon: '🚀', price: 500000, reqLevel: 60,
+    drops: [
+      { amount: 100000, chance: 40 }, { amount: 300000, chance: 30 },
+      { amount: 800000, chance: 18 }, { amount: 2500000, chance: 9 },
+      { amount: 8000000, chance: 2.5 }, { amount: 30000000, chance: 0.5, jackpot: true },
+    ]
+  },
+  pharaoh: {
+    id: 'pharaoh', name: 'Фараон', icon: '🏺', price: 1000000, reqLevel: 80,
+    drops: [
+      { amount: 200000, chance: 40 }, { amount: 600000, chance: 30 },
+      { amount: 1500000, chance: 18 }, { amount: 5000000, chance: 9 },
+      { amount: 15000000, chance: 2.5 }, { amount: 50000000, chance: 0.5, jackpot: true },
+    ]
+  },
+  titan: {
+    id: 'titan', name: 'Титан', icon: '🏛️', price: 2500000, reqLevel: 100,
+    drops: [
+      { amount: 500000, chance: 41 }, { amount: 1500000, chance: 29 },
+      { amount: 4000000, chance: 18 }, { amount: 12000000, chance: 9 },
+      { amount: 40000000, chance: 2.5 }, { amount: 150000000, chance: 0.5, jackpot: true },
+    ]
+  },
+  galaxy: {
+    id: 'galaxy', name: 'Галактика', icon: '🌌', price: 5000000, reqLevel: 130,
+    drops: [
+      { amount: 1000000, chance: 40 }, { amount: 3000000, chance: 30 },
+      { amount: 8000000, chance: 18 }, { amount: 25000000, chance: 9 },
+      { amount: 80000000, chance: 2.5 }, { amount: 300000000, chance: 0.5, jackpot: true },
+    ]
+  },
+  god: {
+    id: 'god', name: 'Божественный', icon: '👼', price: 10000000, reqLevel: 170,
+    drops: [
+      { amount: 2000000, chance: 40 }, { amount: 6000000, chance: 30 },
+      { amount: 15000000, chance: 18 }, { amount: 50000000, chance: 9 },
+      { amount: 150000000, chance: 2.5 }, { amount: 600000000, chance: 0.5, jackpot: true },
+    ]
+  },
+  infinity: {
+    id: 'infinity', name: 'Бесконечность', icon: '♾️', price: 25000000, reqLevel: 200,
+    drops: [
+      { amount: 5000000, chance: 40 }, { amount: 15000000, chance: 30 },
+      { amount: 40000000, chance: 18 }, { amount: 120000000, chance: 9 },
+      { amount: 400000000, chance: 2.5 }, { amount: 1500000000, chance: 0.5, jackpot: true },
+    ]
+  },
+  multiverse: {
+    id: 'multiverse', name: 'Мультивселенная', icon: '🌍', price: 50000000, reqLevel: 250,
+    drops: [
+      { amount: 10000000, chance: 40 }, { amount: 30000000, chance: 30 },
+      { amount: 80000000, chance: 18 }, { amount: 250000000, chance: 9 },
+      { amount: 800000000, chance: 2.5 }, { amount: 3000000000, chance: 0.5, jackpot: true },
+    ]
+  },
+  absolute: {
+    id: 'absolute', name: 'Абсолют', icon: '💠', price: 100000000, reqLevel: 300,
+    drops: [
+      { amount: 20000000, chance: 40 }, { amount: 60000000, chance: 30 },
+      { amount: 150000000, chance: 18 }, { amount: 500000000, chance: 9 },
+      { amount: 1500000000, chance: 2.5 }, { amount: 10000000000, chance: 0.5, jackpot: true },
+    ]
   }
 };
 
 /* ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==================== */
 
-// Функция для выпадения приза с учетом понижения шансов (в 1.2 раза) и ивента на удачу
 export function rollDrop(drops, luck = 1) {
   let adjustedDrops = drops.map(d => {
     let c = d.chance;
-    // Понижаем шансы хороших дропов и повышаем шансы плохих
-    if (d.big || d.jackpot || d.amount >= 1000) c = c / 1.2; 
+    if (d.big || d.jackpot || d.amount >= 1000) c = c / 1.2;
     else c = c * 1.2;
     
-    // Применяем ивент на удачу
     if (luck > 1) {
       if (d.big || d.jackpot || d.amount >= 1000) c *= luck;
       else c /= luck;
