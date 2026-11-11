@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Opener 3.0 — Вход</title>
+<link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+<div class="auth-box">
+  <div class="logo">🎁 Case Opener <span class="v">3.0</span></div>
+  <p class="sub">Войди или создай аккаунт</p>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="login">Вход</button>
+    <button class="tab" data-tab="register">Регистрация</button>
+  </div>
+
+  <form id="authForm">
+    <label>Имя (латиница, ≥1 буква)
+      <input type="text" id="username" autocomplete="username" required>
+    </label>
+    <label>Пароль (≥5 символов)
+      <input type="password" id="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit" class="btn" id="submitBtn">Войти</button>
+  </form>
+
+  <div class="error" id="error"></div>
+</div>
+
+<footer>Case opener 3.0 Beta by <b>NotPro1703</b></footer>
+
+<script type="module" src="js/auth.js"></script>
+</body>
+</html>

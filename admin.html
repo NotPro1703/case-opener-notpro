@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Админ-панель | Case Opener</title>
+<link rel="stylesheet" href="css/game.css">
+<style>
+  body { padding: 20px; }
+  .admin-grid { display: grid; gap: 20px; max-width: 800px; margin: 0 auto; }
+  .admin-box { background: #16203a; border: 1px solid #24344f; border-radius: 12px; padding: 20px; }
+  .admin-box h2 { margin-bottom: 15px; color: #4da6ff; font-size: 1.2rem; }
+  .input-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .input-row input, .input-row select { flex: 1; padding: 10px; background: #0e1524; border: 1px solid #24344f; border-radius: 8px; color: #fff; }
+  .input-row button { padding: 10px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1 style="text-align:center; margin-bottom:20px;">🛡️ Админ-панель</h1>
+
+<div class="admin-grid">
+  <!-- Выдача денег / Уровней -->
+  <div class="admin-box">
+    <h2>Выдать награду</h2>
+    <div class="input-row">
+      <input type="text" id="targetName" placeholder="Никнейм игрока">
+      <input type="number" id="amountMoney" placeholder="Сумма ₽">
+      <input type="number" id="amountXp" placeholder="XP">
+      <button onclick="giveReward()">Выдать</button>
+    </div>
+  </div>
+
+  <!-- Ивенты -->
+  <div class="admin-box">
+    <h2>Управление ивентами</h2>
+    <div class="input-row">
+      <input type="number" id="evMulti" placeholder="Множитель денег (x1.5)" step="0.1">
+      <input type="number" id="evLuck" placeholder="Удача (x1.2)" step="0.1">
+      <input type="datetime-local" id="evTime">
+      <button onclick="startEvent()">Включить</button>
+    </div>
+    <button onclick="stopEvent()" style="background:#dc2626;">Выключить ивент</button>
+  </div>
+
+  <!-- Бан -->
+  <div class="admin-box">
+    <h2>Бан / Разбан</h2>
+    <div class="input-row">
+      <input type="text" id="banName" placeholder="Никнейм игрока">
+      <button onclick="toggleBan()">Забанить / Разбанить</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { auth, db } from './js/firebase-config.js';
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+
+let isAdmin = false;
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { document.body.innerHTML = '<h1>Войдите в игру</h1>'; return; }
+  const uDoc = await getDoc(doc(db, 'users', user.uid));
+  if (uDoc.exists() && uDoc.data().isAdmin) {
+    isAdmin = true;
+    console.log("Админ подтвержден");
+  } else {
+    document.body.innerHTML = '<h1>⛔ Доступ запрещен</h1>';
+  }
+});
+
+async function findUidByName(name) {
+  const nameDoc = await getDoc(doc(db, 'usernames', name.toLowerCase().trim()));
+  return nameDoc.exists() ? nameDoc.data().uid : null;
+}
+
+window.giveReward = async () => {
+  if (!isAdmin) return;
+  const name = document.getElementById('targetName').value;
+  const money = parseInt(document.getElementById('amountMoney').value) || 0;
+  const xp = parseInt(document.getElementById('amountXp').value) || 0;
+  const uid = await findUidByName(name);
+  if (!uid) return alert('Игрок не найден');
+
+  const uDoc = await getDoc(doc(db, 'users', uid));
+  const uData = uDoc.data();
+  const newXp = (uData.xp || 0) + xp;
+  const newLevel = Math.min(300, Math.floor(newXp / 1000) + 1);
+
+  await updateDoc(doc(db, 'users', uid), {
+    balance: (uData.balance || 0) + money,
+    xp: newXp,
+    level: newLevel
+  });
+  alert(`Выдано ${money}₽ и ${xp}XP игроку ${name}`);
+};
+
+window.startEvent = async () => {
+  if (!isAdmin) return;
+  const multi = parseFloat(document.getElementById('evMulti').value) || 1;
+  const luck = parseFloat(document.getElementById('evLuck').value) || 1;
+  const timeVal = document.getElementById('evTime').value;
+  
+  if (!timeVal) return alert('Укажите время окончания');
+  const endTime = new Date(timeVal);
+
+  await setDoc(doc(db, 'settings', 'events'), {
+    multiplier: multi,
+    luck: luck,
+    endTime: endTime
+  });
+  alert('Ивент запущен!');
+};
+
+window.stopEvent = async () => {
+  if (!isAdmin) return;
+  await setDoc(doc(db, 'settings', 'events'), {
+    multiplier: 1,
+    luck: 1,
+    endTime: null
+  });
+  alert('Ивент выключен');
+};
+
+window.toggleBan = async () => {
+  if (!isAdmin) return;
+  const name = document.getElementById('banName').value;
+  const uid = await findUidByName(name);
+  if (!uid) return alert('Игрок не найден');
+
+  const uDoc = await getDoc(doc(db, 'users', uid));
+  const currentStatus = uDoc.data().banned || false;
+
+  await updateDoc(doc(db, 'users', uid), { banned: !currentStatus });
+  alert(`Игрок ${name} ${!currentStatus ? 'забанен' : 'разбанен'}`);
+};
+</script>
+</body>
+</html>
