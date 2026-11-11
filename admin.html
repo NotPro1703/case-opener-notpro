@@ -10,8 +10,8 @@
   .admin-grid { display: grid; gap: 20px; max-width: 800px; margin: 0 auto; }
   .admin-box { background: #16203a; border: 1px solid #24344f; border-radius: 12px; padding: 20px; }
   .admin-box h2 { margin-bottom: 15px; color: #4da6ff; font-size: 1.2rem; }
-  .input-row { display: flex; gap: 10px; margin-bottom: 10px; }
-  .input-row input, .input-row select { flex: 1; padding: 10px; background: #0e1524; border: 1px solid #24344f; border-radius: 8px; color: #fff; }
+  .input-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .input-row input { flex: 1; min-width: 120px; padding: 10px; background: #0e1524; border: 1px solid #24344f; border-radius: 8px; color: #fff; }
   .input-row button { padding: 10px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
 </style>
 </head>
@@ -19,14 +19,22 @@
 <h1 style="text-align:center; margin-bottom:20px;">🛡️ Админ-панель</h1>
 
 <div class="admin-grid">
-  <!-- Выдача денег / Уровней -->
+  <!-- Выдача наград -->
   <div class="admin-box">
     <h2>Выдать награду</h2>
     <div class="input-row">
       <input type="text" id="targetName" placeholder="Никнейм игрока">
+    </div>
+    <div class="input-row">
       <input type="number" id="amountMoney" placeholder="Сумма ₽">
       <input type="number" id="amountXp" placeholder="XP">
-      <button onclick="giveReward()">Выдать</button>
+    </div>
+    <div class="input-row">
+      <input type="number" id="amountShards" placeholder="Осколки 🔹">
+      <input type="number" id="amountPrestige" placeholder="Престиж ⭐">
+    </div>
+    <div class="input-row">
+      <button onclick="giveReward()" style="width: 100%;">Выдать</button>
     </div>
   </div>
 
@@ -34,12 +42,16 @@
   <div class="admin-box">
     <h2>Управление ивентами</h2>
     <div class="input-row">
-      <input type="number" id="evMulti" placeholder="Множитель денег (x1.5)" step="0.1">
-      <input type="number" id="evLuck" placeholder="Удача (x1.2)" step="0.1">
-      <input type="datetime-local" id="evTime">
-      <button onclick="startEvent()">Включить</button>
+      <input type="number" id="evMulti" placeholder="Множитель (x2)" step="0.1">
+      <input type="number" id="evLuck" placeholder="Удача (x1.5)" step="0.1">
     </div>
-    <button onclick="stopEvent()" style="background:#dc2626;">Выключить ивент</button>
+    <div class="input-row">
+      <input type="datetime-local" id="evTime">
+    </div>
+    <div class="input-row">
+      <button onclick="startEvent()" style="flex:1; background:#22c55e;">Включить</button>
+      <button onclick="stopEvent()" style="flex:1; background:#dc2626;">Выключить</button>
+    </div>
   </div>
 
   <!-- Бан -->
@@ -80,6 +92,9 @@ window.giveReward = async () => {
   const name = document.getElementById('targetName').value;
   const money = parseInt(document.getElementById('amountMoney').value) || 0;
   const xp = parseInt(document.getElementById('amountXp').value) || 0;
+  const shards = parseInt(document.getElementById('amountShards').value) || 0;
+  const prestige = parseInt(document.getElementById('amountPrestige').value) || 0;
+  
   const uid = await findUidByName(name);
   if (!uid) return alert('Игрок не найден');
 
@@ -91,9 +106,11 @@ window.giveReward = async () => {
   await updateDoc(doc(db, 'users', uid), {
     balance: (uData.balance || 0) + money,
     xp: newXp,
-    level: newLevel
+    level: newLevel,
+    shards: (uData.shards || 0) + shards,
+    prestige: (uData.prestige || 0) + prestige
   });
-  alert(`Выдано ${money}₽ и ${xp}XP игроку ${name}`);
+  alert(`Выдано: ${money}₽, ${xp}XP, ${shards} осколков, ${prestige} престижа.`);
 };
 
 window.startEvent = async () => {
