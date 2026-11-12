@@ -8,6 +8,8 @@ import { initLeaderboard, openLeaderboard } from './leaderboard.js';
 import { checkQuests, checkLevelUp, usePromo, checkAchievements, DAILY_QUESTS } from './quests.js';
 import { initGlobalChat, sendGlobalMessage } from './global-chat.js';
 import { initClans } from './clans.js';
+import { initStreak } from './streak.js';
+import { initSchool } from './school.js';
 
 const $ = id => document.getElementById(id);
 
@@ -29,7 +31,6 @@ export function updateBalanceUI() {
   if ($('balance')) $('balance').textContent = state.balance.toLocaleString('ru-RU');
   if ($('playerLevel')) $('playerLevel').textContent = state.level;
   
-  // Формула для полоски XP
   if ($('playerXp')) {
     let xpNeeded = 50;
     let totalXpForLevel = 0;
@@ -37,7 +38,7 @@ export function updateBalanceUI() {
       totalXpForLevel += xpNeeded;
       xpNeeded = Math.floor(50 * Math.pow(i + 1, 2.5));
     }
-    const currentXpInLevel = state.xp - totalXpForLevel;
+    const currentXpInLevel = Math.max(0, state.xp - totalXpForLevel);
     $('playerXp').textContent = `${currentXpInLevel} / ${xpNeeded} XP`;
   }
 }
@@ -91,11 +92,14 @@ onAuthStateChanged(auth, async (user) => {
     onSnapshot(doc(db, 'settings', 'globalJackpot'), (snap) => { if (snap.exists() && $('globalJackpot')) $('globalJackpot').textContent = (snap.data().amount || 0).toLocaleString('ru-RU') + ' ₽'; });
     onSnapshot(doc(db, 'settings', 'events'), (snap) => { if (snap.exists()) { const d = snap.data(); activeEvent = { multiplier: Number(d.multiplier) || 1, luck: Number(d.luck) || 1, endTime: d.endTime ? (d.endTime.toMillis ? d.endTime.toMillis() : Number(d.endTime)) : null }; updateEventBanner(); } });
 
+    // Инициализация модулей (после того, как данные загружены)
     initFriends(currentUser, state, db);
     initChat(currentUser, state, db);
     initLeaderboard();
     initGlobalChat(currentUser);
     initClans(currentUser, state);
+    initStreak();
+    initSchool(); // <-- Вызываем здесь
   } catch (err) { console.error(err); toast("Ошибка загрузки"); }
 });
 
@@ -159,8 +163,6 @@ async function buyCase(caseObj, qty, isSyndicate = false) {
       if (!isGlobalJackpot) { const prestigeBonus = 1 + ((state.userData.prestige || 0) * 0.02); finalAmount = Math.floor(finalAmount * activeEvent.multiplier * prestigeBonus); }
       
       const shardsEarned = Math.max(1, Math.floor(caseObj.price / 1000));
-      
-      // 3.2: XP зависит от цены кейса
       const xpGained = 10 + Math.floor(caseObj.price / 5000);
 
       await updateDoc(doc(db, 'users', currentUser.uid), { 
@@ -175,19 +177,25 @@ async function buyCase(caseObj, qty, isSyndicate = false) {
       if (prize.jackpot || finalAmount >= 10000000) sendGlobalMessage(`💎 Игрок ${currentUser.username} выбил ${finalAmount.toLocaleString('ru-RU')} ₽ в кейсе "${caseObj.name}"!`);
 
       const displayPrize = { ...prize, amount: finalAmount, globalJackpot: isGlobalJackpot };
-      await new Promise(resolve => runRoulette(caseObj, displayPrize, resolve));
+      await new Promise(resolve => runRoulette(caseObj, displayPrize, resolve, false));
     }
     checkQuests(); checkAchievements();
   } catch (e) { console.error(e); toast('Ошибка покупки'); }
 }
 
-function runRoulette(caseObj, prize, onComplete = null) {
+export function runRoulette(caseObj, prize, onComplete = null, isSchool = false) {
   const overlay = $('overlay'), strip = $('strip'), roulette = $('roulette'), resultBig = $('resultBig'), sellBtn = $('sellBtn');
   if (!overlay) { if (onComplete) onComplete(); return; }
   overlay.classList.add('active'); resultBig.textContent = ''; resultBig.className = 'result-big'; sellBtn.style.display = 'none';
   const SLOT_W = 112, SLOT_COUNT = 80, WIN_INDEX = 70, slots = [];
   for (let i = 0; i < SLOT_COUNT; i++) slots.push(i === WIN_INDEX ? prize : caseObj.drops[Math.floor(Math.random()*caseObj.drops.length)]);
-  strip.innerHTML = slots.map(d => `<div class="slot ${rarityClass(d)}"><div class="em">${dropEmoji(d)}</div><div>${d.amount.toLocaleString('ru-RU')} ₽</div></div>`).join('');
+  
+  strip.innerHTML = slots.map(d => `
+    <div class="slot ${rarityClass(d)}">
+      <div class="em">${dropEmoji(d)}</div>
+      <div>${d.amount.toLocaleString('ru-RU')} ${isSchool ? '📄' : '₽'}</div>
+    </div>`).join('');
+
   const viewW = roulette.clientWidth, targetX = -(WIN_INDEX * SLOT_W + SLOT_W/2 - viewW/2), startX = -(2 * SLOT_W);
   strip.style.transform = `translateX(${startX}px)`;
   const DURATION = 5000, startTime = performance.now(), easeOutQuint = t => 1 - Math.pow(1 - t, 5);
@@ -199,7 +207,7 @@ function runRoulette(caseObj, prize, onComplete = null) {
   requestAnimationFrame(frame);
   function finish() {
     resultBig.className = 'result-big pop ' + (prize.globalJackpot ? 'rarity-jackpot' : rarityClass(prize));
-    resultBig.textContent = `+${prize.amount.toLocaleString('ru-RU')} ₽${prize.globalJackpot ? ' 👑 ДЖЕКПОТ!' : ''}`;
+    resultBig.textContent = `+${prize.amount.toLocaleString('ru-RU')} ${isSchool ? '📄' : '₽'}${prize.globalJackpot ? ' 👑 ДЖЕКПОТ!' : ''}`;
     sellBtn.style.display = ''; sellBtn.textContent = 'Забрать';
     sellBtn.onclick = () => { overlay.classList.remove('active'); if (onComplete) onComplete(); };
   }
@@ -313,11 +321,19 @@ if ($('spinWheelBtn')) {
 
 /* ==================== КРАФТ ==================== */
 const CRAFT_CASES = [
-  { id: 'exclusive_1', name: 'Эксклюзивный 1', icon: '📦', cost: 25000 },
-  { id: 'exclusive_2', name: 'Эксклюзивный 2', icon: '🎁', cost: 50000 },
-  { id: 'exclusive_3', name: 'Эксклюзивный 3', icon: '💎', cost: 100000 },
-  { id: 'exclusive_4', name: 'Эксклюзивный 4', icon: '🔮', cost: 250000 },
-  { id: 'tester', name: 'Кейс Тестера', icon: '🛠️', cost: 1000000 }
+  { id: 'exclusive_1', name: 'Эксклюзивный 1', icon: '📦', cost: 25000, type: 'case' },
+  { id: 'exclusive_2', name: 'Эксклюзивный 2', icon: '🎁', cost: 50000, type: 'case' },
+  { id: 'exclusive_3', name: 'Эксклюзивный 3', icon: '💎', cost: 100000, type: 'case' },
+  { id: 'exclusive_4', name: 'Эксклюзивный 4', icon: '🔮', cost: 250000, type: 'case' },
+  { id: 'tester', name: 'Кейс Тестера', icon: '🛠️', cost: 1000000, type: 'case' },
+  { id: 'av_wolf', name: 'Волк', icon: '🐺', cost: 15000, type: 'avatar', iconId: '🐺' },
+  { id: 'av_devil', name: 'Дьявол', icon: '😈', cost: 75000, type: 'avatar', iconId: '😈' },
+  { id: 'av_skull', name: 'Череп', icon: '💀', cost: 200000, type: 'avatar', iconId: '💀' },
+  { id: 'av_ufo', name: 'НЛО', icon: '🛸', cost: 500000, type: 'avatar', iconId: '🛸' },
+  { id: 'fr_red', name: 'Кровавая', icon: '🟥', cost: 30000, type: 'frame', frameStyle: '0 0 20px #ff0000' },
+  { id: 'fr_toxic', name: 'Токсичная', icon: '🟩', cost: 100000, type: 'frame', frameStyle: '0 0 20px #39ff14' },
+  { id: 'fr_gold', name: 'Королевская', icon: '🟨', cost: 300000, type: 'frame', frameStyle: '0 0 30px #ffd700, 0 0 10px #ffaa00' },
+  { id: 'fr_galaxy', name: 'Галактическая', icon: '🪐', cost: 750000, type: 'frame', frameStyle: '0 0 25px #4da6ff, 0 0 40px #b26bff' }
 ];
 const CRAFT_DROPS = {
   exclusive_1: [{ amount: 50000, chance: 50 }, { amount: 150000, chance: 30 }, { amount: 500000, chance: 15 }, { amount: 2000000, chance: 5, jackpot: true }],
@@ -326,43 +342,80 @@ const CRAFT_DROPS = {
   exclusive_4: [{ amount: 5000000, chance: 40 }, { amount: 25000000, chance: 30 }, { amount: 100000000, chance: 20 }, { amount: 500000000, chance: 8, big: true }, { amount: 2000000000, chance: 2, jackpot: true }],
   tester: [{ amount: 5000000, chance: 50 }, { amount: 25000000, chance: 30 }, { amount: 100000000, chance: 15 }, { amount: 1000000000, chance: 5, jackpot: true }]
 };
+
 if ($('craftBtn')) $('craftBtn').onclick = () => { updateCraftUI(); $('craftModal').classList.add('active'); };
 if ($('closeCraft')) $('closeCraft').onclick = () => $('craftModal').classList.remove('active');
+
 function updateCraftUI() {
   const shards = state.userData.shards || 0;
   if ($('craftShards')) $('craftShards').textContent = shards.toLocaleString('ru-RU') + ' 🔹';
   const list = $('craftList'); if (!list) return;
-  list.innerHTML = CRAFT_CASES.map(c => {
-    const can = shards >= c.cost;
-    return `<div style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.05); border-radius:12px;">
-      <div style="font-size:2rem;">${c.icon}</div>
-      <div style="flex:1;"><div style="font-weight:bold;">${c.name}</div><div style="font-size:0.8rem; color:#b26bff;">${c.cost.toLocaleString('ru-RU')} 🔹</div></div>
-      <button class="btn" style="width:auto; padding:8px 14px; background:${can ? 'linear-gradient(145deg, #b26bff, #7c3aed)' : '#4b5563'};" ${can ? '' : 'disabled'} onclick="craftCase('${c.id}', ${c.cost})">Скрафтить</button>
-    </div>`;
-  }).join('');
+  const casesHtml = CRAFT_CASES.filter(c => c.type === 'case').map(c => renderCraftItem(c, shards)).join('');
+  const avatarsHtml = CRAFT_CASES.filter(c => c.type === 'avatar').map(c => renderCraftItem(c, shards)).join('');
+  const framesHtml = CRAFT_CASES.filter(c => c.type === 'frame').map(c => renderCraftItem(c, shards)).join('');
+
+  list.innerHTML = `
+    <div class="section-title" style="margin-top:0;">📦 Кейсы</div>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:15px;">${casesHtml}</div>
+    <div class="section-title">🖼 Аватарки</div>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:15px;">${avatarsHtml}</div>
+    <div class="section-title">🖼 Рамки</div>
+    <div style="display:flex; flex-direction:column; gap:8px;">${framesHtml}</div>
+  `;
 }
-window.craftCase = async (id, cost) => {
+
+function renderCraftItem(c, shards) {
+  let isOwned = false;
+  if (c.type === 'avatar') isOwned = (state.userData.ownedAvatars || []).includes(c.id);
+  if (c.type === 'frame') isOwned = (state.userData.ownedFrames || []).includes(c.id);
+
+  const can = shards >= c.cost && !isOwned;
+  const btnText = isOwned ? 'Куплено' : 'Скрафтить';
+  const btnColor = isOwned ? '#4b5563' : (can ? 'linear-gradient(145deg, #b26bff, #7c3aed)' : '#4b5563');
+  
+  let iconHtml = `<div style="font-size:2rem;">${c.icon}</div>`;
+  if (c.type === 'frame') iconHtml = `<div style="width:36px; height:36px; border-radius:50%; background:#16203a; border:2px solid #fff; box-shadow:${c.frameStyle}; margin:0 auto;"></div>`;
+
+  return `<div style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.05); border-radius:12px;">
+    <div style="width:40px; text-align:center;">${iconHtml}</div>
+    <div style="flex:1;"><div style="font-weight:bold;">${c.name}</div><div style="font-size:0.8rem; color:#b26bff;">${c.cost.toLocaleString('ru-RU')} 🔹</div></div>
+    <button class="btn" style="width:auto; padding:8px 14px; background:${btnColor};" ${can ? '' : 'disabled'} onclick="craftItem('${c.id}', ${c.cost}, '${c.type}', '${c.iconId || c.frameStyle || ''}')">${btnText}</button>
+  </div>`;
+}
+
+window.craftItem = async (id, cost, type, data) => {
   if ((state.userData.shards || 0) < cost) return toast('Мало осколков!');
-  await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-cost) });
-  toast('Кейс скрафчен!'); $('craftModal').classList.remove('active');
-  const prize = rollDrop(CRAFT_DROPS[id], activeEvent.luck);
-  const pBonus = 1 + ((state.userData.prestige || 0) * 0.02);
-  let final = Math.floor(prize.amount * activeEvent.multiplier * pBonus);
-  await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(final), xp: increment(250), totalOpened: increment(1) });
-  runRoulette({ name: CRAFT_CASES.find(c => c.id === id).name, drops: CRAFT_DROPS[id] }, { ...prize, amount: final }, () => updateCraftUI());
+  try {
+    await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-cost) });
+    if (type === 'case') {
+      toast('Кейс скрафчен!'); $('craftModal').classList.remove('active');
+      const prize = rollDrop(CRAFT_DROPS[id], activeEvent.luck);
+      const pBonus = 1 + ((state.userData.prestige || 0) * 0.02);
+      let final = Math.floor(prize.amount * activeEvent.multiplier * pBonus);
+      await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(final), xp: increment(250), totalOpened: increment(1) });
+      runRoulette({ name: CRAFT_CASES.find(c => c.id === id).name, drops: CRAFT_DROPS[id] }, { ...prize, amount: final }, () => updateCraftUI(), false);
+    } 
+    else if (type === 'avatar') {
+      await updateDoc(doc(db, 'users', currentUser.uid), { ownedAvatars: arrayUnion(id), avatar: data });
+      toast(`Аватарка "${data}" получена и надета!`); updateCraftUI();
+    } 
+    else if (type === 'frame') {
+      await updateDoc(doc(db, 'users', currentUser.uid), { ownedFrames: arrayUnion(id), frame: id });
+      toast(`Рамка скрафчена и надета!`); updateCraftUI();
+    }
+  } catch (e) { console.error(e); toast('Ошибка крафта'); }
 };
 
 /* ==================== ПРЕСТИЖ ==================== */
 if ($('prestigeBtn')) {
   $('prestigeBtn').onclick = async () => {
-    if (state.level < 500) return toast('Нужен 500 уровень!'); // Изменено на 500
+    if (state.level < 500) return toast('Нужен 500 уровень!');
     if (!confirm('Обнулить прогресс и получить престиж?')) return;
     const newPrestige = (state.userData.prestige || 0) + 1;
     await updateDoc(doc(db, 'users', currentUser.uid), { balance: 0, level: 1, xp: 0, prestige: newPrestige });
     state.balance = 0; state.level = 1; state.xp = 0; state.userData.prestige = newPrestige;
     updateBalanceUI(); $('profPrestige').textContent = newPrestige; $('profLevel').textContent = 'Уровень 1';
-    toast(`🌟 Престиж: ${newPrestige}`); $('profileModal').classList.remove('active');
-    renderCases();
+    toast(`🌟 Престиж: ${newPrestige}`); $('profileModal').classList.remove('active'); renderCases();
   };
 }
 
@@ -374,7 +427,6 @@ const AVATARS = [
   { id: 'lion', icon: '🦁', price: 250000, name: 'Лев' },
   { id: 'dragon', icon: '🐉', price: 1000000, name: 'Дракон' },
   { id: 'alien', icon: '👽', price: 5000000, name: 'Пришелец' },
-  // 3.2 Новые аватарки
   { id: 'god', icon: '🗿', price: 100000000, name: 'Божество' },
   { id: 'void', icon: '🕳️', price: 1000000000, name: 'Пустота' }
 ];
@@ -384,35 +436,66 @@ const FRAMES = [
   { id: 'gold', style: '0 0 15px #ffd700', price: 500000, name: 'Золотая' },
   { id: 'neon', style: '0 0 20px #b26bff', price: 2000000, name: 'Неоновая' },
   { id: 'fire', style: '0 0 25px #ff4500, 0 0 10px #ff0000', price: 10000000, name: 'Огненная' },
-  // 3.2 Новые рамки
   { id: 'cosmic', style: '0 0 30px #00ffff, 0 0 10px #ff00ff', price: 100000000, name: 'Космическая' },
-  { id: 'void_frame', style: '0 0 40px #000, 0 0 20px #fff', price: 1000000000, name: 'Абсолютная' }
+  { id: 'void_frame', style: '0 0 40px #000, 0 0 20px #fff', price: 1000000000, name: 'Абсолютная' },
+  { id: 'fr_red', style: '0 0 20px #ff0000', name: 'Кровавая' },
+  { id: 'fr_toxic', style: '0 0 20px #39ff14', name: 'Токсичная' },
+  { id: 'fr_gold', style: '0 0 30px #ffd700, 0 0 10px #ffaa00', name: 'Королевская' },
+  { id: 'fr_galaxy', style: '0 0 25px #4da6ff, 0 0 40px #b26bff', name: 'Галактическая' },
+  // Школьные рамки
+  { id: 'sf_1', style: '0 0 15px #4da6ff', name: 'Синяя (Школа)' },
+  { id: 'sf_2', style: '0 0 20px #ff9800', name: 'Оранжевая (Школа)' },
+  { id: 'sf_3', style: '0 0 25px #e91e63', name: 'Розовая (Школа)' },
+  { id: 'sf_4', style: '0 0 30px #ffd700, 0 0 10px #ffaa00', name: 'Золотая (Школа)' },
+  { id: 'sf_5', style: '0 0 35px #9c27b0, 0 0 15px #4da6ff', name: 'Выпускник (Школа)' }
 ];
+
+let shopTab = 'money';
+
 function initShop() {
   if (!$('shopAvatars') || !$('shopFrames')) return;
-  $('shopAvatars').innerHTML = AVATARS.map(a => {
-    const owned = (state.userData.ownedAvatars || []).includes(a.id) || a.price === 0;
+  const shopModalBox = $('shopModal').querySelector('.modal-box');
+  if (!document.getElementById('shopTabs')) {
+    const tabs = document.createElement('div');
+    tabs.id = 'shopTabs'; tabs.style = 'display:flex; gap:10px; margin-bottom:15px;';
+    tabs.innerHTML = `<button class="btn" id="tabMoney" style="flex:1; background:linear-gradient(145deg, #3d8bff, #2563eb)">💰 За деньги</button><button class="btn" id="tabShards" style="flex:1; background:#24344f">🔹 За осколки</button>`;
+    shopModalBox.insertBefore(tabs, shopModalBox.children[2]);
+    $('tabMoney').onclick = () => { $('tabMoney').style.background = 'linear-gradient(145deg, #3d8bff, #2563eb)'; $('tabShards').style.background = '#24344f'; shopTab = 'money'; initShop(); };
+    $('tabShards').onclick = () => { $('tabShards').style.background = 'linear-gradient(145deg, #b26bff, #7c3aed)'; $('tabMoney').style.background = '#24344f'; shopTab = 'shards'; initShop(); };
+  }
+
+  $('shopAvatars').innerHTML = AVATARS.filter(a => shopTab === 'money' ? (a.price > 0 || a.id === 'default') : a.shardPrice > 0).map(a => {
+    const owned = (state.userData.ownedAvatars || []).includes(a.id) || (a.price === 0 && a.shardPrice === undefined);
     const equipped = (state.userData.avatar || '👤') === a.icon;
-    return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="buyAvatar('${a.id}', ${a.price}, '${a.icon}')">
+    const costText = shopTab === 'money' ? `${a.price.toLocaleString('ru-RU')} ₽` : `${(a.shardPrice || 0).toLocaleString('ru-RU')} 🔹`;
+    return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="buyAvatar('${a.id}', ${a.price || 0}, ${a.shardPrice || 0}, '${a.icon}')">
       <div style="font-size:2rem;">${a.icon}</div><div style="font-size:0.75rem; color:#fff; margin-top:5px;">${a.name}</div>
-      <div style="font-size:0.75rem; color:${owned ? '#22c55e' : '#ffd700'}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : a.price.toLocaleString('ru-RU') + ' ₽'}</div></div>`;
+      <div style="font-size:0.75rem; color:${owned ? '#22c55e' : (shopTab === 'money' ? '#ffd700' : '#b26bff')}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : costText}</div></div>`;
   }).join('');
-  $('shopFrames').innerHTML = FRAMES.map(f => {
-    const owned = (state.userData.ownedFrames || []).includes(f.id) || f.price === 0;
+
+  $('shopFrames').innerHTML = FRAMES.filter(f => shopTab === 'money' ? (f.price > 0 || f.id === 'none') : f.shardPrice > 0).map(f => {
+    const owned = (state.userData.ownedFrames || []).includes(f.id) || (f.price === 0 && f.shardPrice === undefined);
     const equipped = (state.userData.frame || 'none') === f.id;
-    return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="buyFrame('${f.id}', ${f.price}, '${f.style}')">
+    const costText = shopTab === 'money' ? `${f.price.toLocaleString('ru-RU')} ₽` : `${(f.shardPrice || 0).toLocaleString('ru-RU')} 🔹`;
+    return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="buyFrame('${f.id}', ${f.price || 0}, ${f.shardPrice || 0}, '${f.style}')">
       <div style="width:40px; height:40px; border-radius:50%; background:#16203a; margin:0 auto; border:2px solid #fff; box-shadow:${f.style};"></div>
       <div style="font-size:0.75rem; color:#fff; margin-top:5px;">${f.name}</div>
-      <div style="font-size:0.75rem; color:${owned ? '#22c55e' : '#ffd700'}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : f.price.toLocaleString('ru-RU') + ' ₽'}</div></div>`;
+      <div style="font-size:0.75rem; color:${owned ? '#22c55e' : (shopTab === 'money' ? '#ffd700' : '#b26bff')}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : costText}</div></div>`;
   }).join('');
 }
 if ($('shopBtn')) $('shopBtn').onclick = () => { initShop(); $('shopModal').classList.add('active'); };
 if ($('closeShop')) $('closeShop').onclick = () => $('shopModal').classList.remove('active');
-window.buyAvatar = async (id, price, icon) => {
-  const owned = (state.userData.ownedAvatars || []).includes(id) || price === 0;
+
+window.buyAvatar = async (id, price, shardPrice, icon) => {
+  const owned = (state.userData.ownedAvatars || []).includes(id) || (price === 0 && shardPrice === 0);
   if (!owned) {
-    if (state.balance < price) return toast('Недостаточно средств!');
-    await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedAvatars: arrayUnion(id), avatar: icon });
+    if (price > 0) {
+      if (state.balance < price) return toast('Недостаточно денег!');
+      await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedAvatars: arrayUnion(id), avatar: icon });
+    } else if (shardPrice > 0) {
+      if ((state.userData.shards || 0) < shardPrice) return toast('Недостаточно осколков!');
+      await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-shardPrice), ownedAvatars: arrayUnion(id), avatar: icon });
+    }
     toast('Аватарка куплена и надета!');
   } else {
     await updateDoc(doc(db, 'users', currentUser.uid), { avatar: icon });
@@ -420,11 +503,16 @@ window.buyAvatar = async (id, price, icon) => {
   }
   initShop();
 };
-window.buyFrame = async (id, price, style) => {
-  const owned = (state.userData.ownedFrames || []).includes(id) || price === 0;
+window.buyFrame = async (id, price, shardPrice, style) => {
+  const owned = (state.userData.ownedFrames || []).includes(id) || (price === 0 && shardPrice === 0);
   if (!owned) {
-    if (state.balance < price) return toast('Недостаточно средств!');
-    await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedFrames: arrayUnion(id), frame: id });
+    if (price > 0) {
+      if (state.balance < price) return toast('Недостаточно денег!');
+      await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedFrames: arrayUnion(id), frame: id });
+    } else if (shardPrice > 0) {
+      if ((state.userData.shards || 0) < shardPrice) return toast('Недостаточно осколков!');
+      await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-shardPrice), ownedFrames: arrayUnion(id), frame: id });
+    }
     toast('Рамка куплена и надета!');
   } else {
     await updateDoc(doc(db, 'users', currentUser.uid), { frame: id });

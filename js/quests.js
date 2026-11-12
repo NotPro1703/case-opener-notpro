@@ -24,7 +24,7 @@ export function checkLevelUp(newXp) {
   while (newXp >= totalXpForLevel + xpNeeded && level < 500) {
     totalXpForLevel += xpNeeded;
     level++;
-    xpNeeded = Math.floor(50 * Math.pow(level, 2.5)); 
+    xpNeeded = Math.floor(50 * Math.pow(level, 1.5)); 
   }
 
   if (level > state.level) {

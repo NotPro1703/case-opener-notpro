@@ -54,7 +54,19 @@ function renderList(items) {
     'blue': '0 0 10px #4da6ff',
     'gold': '0 0 15px #ffd700',
     'neon': '0 0 20px #b26bff',
-    'fire': '0 0 25px #ff4500'
+    'fire': '0 0 25px #ff4500',
+    'cosmic': '0 0 30px #00ffff, 0 0 10px #ff00ff',
+    'void_frame': '0 0 40px #000, 0 0 20px #fff',
+    'fr_red': '0 0 20px #ff0000',
+    'fr_toxic': '0 0 20px #39ff14',
+    'fr_gold': '0 0 30px #ffd700, 0 0 10px #ffaa00',
+    'fr_galaxy': '0 0 25px #4da6ff, 0 0 40px #b26bff',
+    // Новые школьные рамки
+    'sf_1': '0 0 15px #4da6ff',
+    'sf_2': '0 0 20px #ff9800',
+    'sf_3': '0 0 25px #e91e63',
+    'sf_4': '0 0 30px #ffd700, 0 0 10px #ffaa00',
+    'sf_5': '0 0 35px #9c27b0, 0 0 15px #4da6ff'
   };
 
   list.innerHTML = items.map(it => {
