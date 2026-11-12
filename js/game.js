@@ -1,6 +1,8 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, serverTimestamp, increment, arrayUnion } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+import { 
+  doc, getDoc, setDoc, updateDoc, onSnapshot, serverTimestamp, increment, arrayUnion, addDoc, collection 
+} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 import { CASES, rollDrop, rarityClass, dropEmoji } from './cases-data.js';
 import { initFriends } from './friends.js';
 import { initChat } from './chat.js';
@@ -10,6 +12,8 @@ import { initGlobalChat, sendGlobalMessage } from './global-chat.js';
 import { initClans } from './clans.js';
 import { initStreak } from './streak.js';
 import { initSchool } from './school.js';
+import { initFriday13 } from './friday13.js';
+import { initInventory } from './inventory.js';
 
 const $ = id => document.getElementById(id);
 
@@ -92,14 +96,15 @@ onAuthStateChanged(auth, async (user) => {
     onSnapshot(doc(db, 'settings', 'globalJackpot'), (snap) => { if (snap.exists() && $('globalJackpot')) $('globalJackpot').textContent = (snap.data().amount || 0).toLocaleString('ru-RU') + ' ₽'; });
     onSnapshot(doc(db, 'settings', 'events'), (snap) => { if (snap.exists()) { const d = snap.data(); activeEvent = { multiplier: Number(d.multiplier) || 1, luck: Number(d.luck) || 1, endTime: d.endTime ? (d.endTime.toMillis ? d.endTime.toMillis() : Number(d.endTime)) : null }; updateEventBanner(); } });
 
-    // Инициализация модулей (после того, как данные загружены)
     initFriends(currentUser, state, db);
     initChat(currentUser, state, db);
     initLeaderboard();
     initGlobalChat(currentUser);
     initClans(currentUser, state);
     initStreak();
-    initSchool(); // <-- Вызываем здесь
+    initSchool();
+    initFriday13();
+    initInventory();
   } catch (err) { console.error(err); toast("Ошибка загрузки"); }
 });
 
@@ -115,27 +120,47 @@ function renderCases() {
       const lastOpen = c.id === 'daily' ? state.userData.lastDaily : state.userData.lastHourly;
       if (lastOpen) { const elapsed = Date.now() - (lastOpen.toMillis ? lastOpen.toMillis() : lastOpen); if (elapsed < c.cooldown) onCooldown = true; }
     }
+    
     card.innerHTML = `
       <div class="case-icon">${c.icon}</div><div class="case-name">${c.name}</div>
       ${c.reqLevel ? `<div style="font-size:0.75rem;color:${isLocked?'#ff6b6b':'#22c55e'}">${isLocked ? '🔒 ' : '✅ '} ${c.reqLevel} ур.</div>` : ''}
       <div class="case-price ${isFree ? 'free' : ''}">${isFree ? 'Бесплатно' : c.price.toLocaleString('ru-RU') + ' ₽'}</div>
-      <div class="case-buy">
+      <div class="case-buy" style="flex-direction:column; gap:5px;">
         ${isFree ? '' : `<select class="qty-select" ${isLocked?'disabled':''}>${Array.from({length:5},(_,i)=>`<option>${i+1}</option>`).join('')}</select>`}
-        <button class="btn" ${onCooldown || isLocked ? 'disabled' : ''}>${isLocked ? 'Заблокировано' : (onCooldown ? 'Ждите' : (isFree ? 'Получить' : 'Купить'))}</button>
+        <div style="display:flex; gap:5px; width:100%;">
+          <button class="btn buy-btn" ${onCooldown || isLocked ? 'disabled' : ''} style="flex:1;">${isLocked ? 'Заблокировано' : (onCooldown ? 'Ждите' : (isFree ? 'Получить' : 'Купить'))}</button>
+          ${isFree ? '' : `<button class="btn gift-btn" ${onCooldown || isLocked ? 'disabled' : ''} style="flex:1; background:#b26bff;">🎁</button>`}
+        </div>
       </div>`;
     grid.appendChild(card);
-    card.querySelector('.btn').onclick = () => {
+    
+    card.querySelector('.buy-btn').onclick = () => {
       if (onCooldown || isLocked) return;
-      if (isFree) buyCase(c, 1, false);
-      else { const qty = parseInt(card.querySelector('.qty-select').value); if (state.balance < c.price * qty) return toast('Недостаточно средств'); buyCase(c, qty, false); }
+      if (isFree) buyCase(c, 1, false, false);
+      else { 
+        const qty = parseInt(card.querySelector('.qty-select').value); 
+        if (state.balance < c.price * qty) return toast('Недостаточно средств'); 
+        buyCase(c, qty, false, false); 
+      }
     };
-    if (!isFree && !onCooldown && !isLocked && state.balance < c.price) card.querySelector('.btn').disabled = true;
+
+    const giftBtn = card.querySelector('.gift-btn');
+    if (giftBtn) {
+      giftBtn.onclick = () => {
+        if (onCooldown || isLocked) return;
+        const qty = parseInt(card.querySelector('.qty-select').value); 
+        if (state.balance < c.price * qty) return toast('Недостаточно средств'); 
+        buyCase(c, qty, false, true);
+      };
+    }
+    if (!isFree && !onCooldown && !isLocked && state.balance < c.price) card.querySelector('.buy-btn').disabled = true;
   });
 }
 
-async function buyCase(caseObj, qty, isSyndicate = false) {
+async function buyCase(caseObj, qty, isSyndicate = false, isGift = false) {
   try {
-    let finalPrice = caseObj.price; if (isSyndicate) finalPrice = Math.floor(caseObj.price * 0.7);
+    let finalPrice = caseObj.price; 
+    if (isSyndicate) finalPrice = Math.floor(caseObj.price * 0.7);
     const totalCost = finalPrice * qty;
     if (state.balance < totalCost) return toast('Недостаточно средств');
     await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-totalCost) });
@@ -151,37 +176,49 @@ async function buyCase(caseObj, qty, isSyndicate = false) {
     const jpDoc = await getDoc(jpRef);
     if (jpDoc.exists()) await updateDoc(jpRef, { amount: increment(jpAmount) }); else await setDoc(jpRef, { amount: jpAmount });
 
-    for (let i = 0; i < qty; i++) {
-      const isGlobalJackpot = Math.random() * 100 < 0.01;
-      let jpWinAmount = 0;
-      if (isGlobalJackpot) { const jpD = await getDoc(doc(db, 'settings', 'globalJackpot')); if (jpD.exists()) { jpWinAmount = jpD.data().amount || 0; if (jpWinAmount > 0) await updateDoc(doc(db, 'settings', 'globalJackpot'), { amount: 0 }); } }
-      
-      let weatherLuck = 1; const h = new Date().getHours(); if (h >= 0 && h < 6) weatherLuck = 1.1;
-      const prize = rollDrop(caseObj.drops, activeEvent.luck * weatherLuck);
-      
-      let finalAmount = isGlobalJackpot && jpWinAmount > 0 ? jpWinAmount : prize.amount;
-      if (!isGlobalJackpot) { const prestigeBonus = 1 + ((state.userData.prestige || 0) * 1.5); finalAmount = Math.floor(finalAmount * activeEvent.multiplier * prestigeBonus); }
-      
-      const shardsEarned = Math.max(5, Math.floor(caseObj.price / 1000));
-      const xpGained = 10 + Math.floor(caseObj.price / 1000);
-
-      await updateDoc(doc(db, 'users', currentUser.uid), { 
-        balance: increment(finalAmount), 
-        xp: increment(xpGained), 
-        totalOpened: increment(1), 
-        shards: increment(shardsEarned), 
-        openedCases: arrayUnion(caseObj.id) 
-      });
-      
-      recordOpenStat(finalAmount); checkLevelUp(state.xp + xpGained);
-      if (prize.jackpot || finalAmount >= 10000000) sendGlobalMessage(`💎 Игрок ${currentUser.username} выбил ${finalAmount.toLocaleString('ru-RU')} ₽ в кейсе "${caseObj.name}"!`);
-
-      const displayPrize = { ...prize, amount: finalAmount, globalJackpot: isGlobalJackpot };
-      await new Promise(resolve => runRoulette(caseObj, displayPrize, resolve, false));
+    if (isGift) {
+      window.openGiftFriendSelect(caseObj, qty);
+    } else {
+      for (let i = 0; i < qty; i++) {
+        await addDoc(collection(db, 'inventory', currentUser.uid, 'items'), {
+          type: 'case', caseId: caseObj.id, caseName: caseObj.name, icon: caseObj.icon, createdAt: serverTimestamp()
+        });
+      }
+      toast(`Куплено ${qty} × ${caseObj.name}. Загляни в инвентарь!`);
     }
-    checkQuests(); checkAchievements();
   } catch (e) { console.error(e); toast('Ошибка покупки'); }
 }
+
+window.openGiftFriendSelect = (caseObj, qty) => {
+  $('friendsModal').classList.add('active');
+  const title = $('friendsModal').querySelector('h2');
+  if (title) title.textContent = '🎁 Кому подарить кейс?';
+  const list = $('friendsList');
+  if (state.friends.length === 0) {
+    list.innerHTML = '<div class="inv-empty">У вас нет друзей.</div>';
+    return;
+  }
+  list.innerHTML = state.friends.map(f => `
+    <div class="friend-item" style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(255,255,255,0.05); border-radius:12px; margin-bottom:8px;">
+      <div class="friend-avatar" style="width:36px; height:36px; border-radius:50%; background:#b26bff; display:flex; align-items:center; justify-content:center; font-weight:bold;">${(f.username||'?')[0].toUpperCase()}</div>
+      <div style="flex:1; font-weight:bold;">${f.username}</div>
+      <button class="btn" style="width:auto; padding:6px 12px; background:#22c55e;" onclick="sendGiftToFriend('${f.uid}', '${f.username}', '${caseObj.id}', ${qty})">Подарить</button>
+    </div>
+  `).join('');
+};
+
+window.sendGiftToFriend = async (toUid, toName, caseId, qty) => {
+  const c = CASES[caseId];
+  try {
+    for (let i = 0; i < qty; i++) {
+      await addDoc(collection(db, 'inventory', toUid, 'items'), {
+        type: 'case', caseId: c.id, caseName: c.name, icon: c.icon, from: currentUser.username, createdAt: serverTimestamp()
+      });
+    }
+    toast(`Кейс "${c.name}" подарен игроку ${toName}!`);
+    $('friendsModal').classList.remove('active');
+  } catch (e) { console.error(e); toast('Ошибка подарка'); }
+};
 
 export function runRoulette(caseObj, prize, onComplete = null, isSchool = false) {
   const overlay = $('overlay'), strip = $('strip'), roulette = $('roulette'), resultBig = $('resultBig'), sellBtn = $('sellBtn');
@@ -189,13 +226,8 @@ export function runRoulette(caseObj, prize, onComplete = null, isSchool = false)
   overlay.classList.add('active'); resultBig.textContent = ''; resultBig.className = 'result-big'; sellBtn.style.display = 'none';
   const SLOT_W = 112, SLOT_COUNT = 80, WIN_INDEX = 70, slots = [];
   for (let i = 0; i < SLOT_COUNT; i++) slots.push(i === WIN_INDEX ? prize : caseObj.drops[Math.floor(Math.random()*caseObj.drops.length)]);
-  
   strip.innerHTML = slots.map(d => `
-    <div class="slot ${rarityClass(d)}">
-      <div class="em">${dropEmoji(d)}</div>
-      <div>${d.amount.toLocaleString('ru-RU')} ${isSchool ? '📄' : '₽'}</div>
-    </div>`).join('');
-
+    <div class="slot ${rarityClass(d)}"><div class="em">${dropEmoji(d)}</div><div>${d.amount.toLocaleString('ru-RU')} ${isSchool ? '📄' : '₽'}</div></div>`).join('');
   const viewW = roulette.clientWidth, targetX = -(WIN_INDEX * SLOT_W + SLOT_W/2 - viewW/2), startX = -(2 * SLOT_W);
   strip.style.transform = `translateX(${startX}px)`;
   const DURATION = 5000, startTime = performance.now(), easeOutQuint = t => 1 - Math.pow(1 - t, 5);
@@ -442,7 +474,6 @@ const FRAMES = [
   { id: 'fr_toxic', style: '0 0 20px #39ff14', name: 'Токсичная' },
   { id: 'fr_gold', style: '0 0 30px #ffd700, 0 0 10px #ffaa00', name: 'Королевская' },
   { id: 'fr_galaxy', style: '0 0 25px #4da6ff, 0 0 40px #b26bff', name: 'Галактическая' },
-  // Школьные рамки
   { id: 'sf_1', style: '0 0 15px #4da6ff', name: 'Синяя (Школа)' },
   { id: 'sf_2', style: '0 0 20px #ff9800', name: 'Оранжевая (Школа)' },
   { id: 'sf_3', style: '0 0 25px #e91e63', name: 'Розовая (Школа)' },
