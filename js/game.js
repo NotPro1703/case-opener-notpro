@@ -28,7 +28,18 @@ export function toast(msg) {
 export function updateBalanceUI() {
   if ($('balance')) $('balance').textContent = state.balance.toLocaleString('ru-RU');
   if ($('playerLevel')) $('playerLevel').textContent = state.level;
-  if ($('playerXp')) $('playerXp').textContent = `${state.xp % 1000} / 1000 XP`;
+  
+  // Формула для полоски XP
+  if ($('playerXp')) {
+    let xpNeeded = 50;
+    let totalXpForLevel = 0;
+    for (let i = 1; i < state.level; i++) {
+      totalXpForLevel += xpNeeded;
+      xpNeeded = Math.floor(50 * Math.pow(i + 1, 2.5));
+    }
+    const currentXpInLevel = state.xp - totalXpForLevel;
+    $('playerXp').textContent = `${currentXpInLevel} / ${xpNeeded} XP`;
+  }
 }
 
 /* ==================== ПОГОДА И ИВЕНТЫ ==================== */
@@ -105,7 +116,7 @@ function renderCases() {
       ${c.reqLevel ? `<div style="font-size:0.75rem;color:${isLocked?'#ff6b6b':'#22c55e'}">${isLocked ? '🔒 ' : '✅ '} ${c.reqLevel} ур.</div>` : ''}
       <div class="case-price ${isFree ? 'free' : ''}">${isFree ? 'Бесплатно' : c.price.toLocaleString('ru-RU') + ' ₽'}</div>
       <div class="case-buy">
-        ${isFree ? '' : `<select class="qty-select" ${isLocked?'disabled':''}>${Array.from({length:10},(_,i)=>`<option>${i+1}</option>`).join('')}</select>`}
+        ${isFree ? '' : `<select class="qty-select" ${isLocked?'disabled':''}>${Array.from({length:5},(_,i)=>`<option>${i+1}</option>`).join('')}</select>`}
         <button class="btn" ${onCooldown || isLocked ? 'disabled' : ''}>${isLocked ? 'Заблокировано' : (onCooldown ? 'Ждите' : (isFree ? 'Получить' : 'Купить'))}</button>
       </div>`;
     grid.appendChild(card);
@@ -148,9 +159,19 @@ async function buyCase(caseObj, qty, isSyndicate = false) {
       if (!isGlobalJackpot) { const prestigeBonus = 1 + ((state.userData.prestige || 0) * 0.02); finalAmount = Math.floor(finalAmount * activeEvent.multiplier * prestigeBonus); }
       
       const shardsEarned = Math.max(1, Math.floor(caseObj.price / 1000));
-      await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(finalAmount), xp: increment(50), totalOpened: increment(1), shards: increment(shardsEarned), openedCases: arrayUnion(caseObj.id) });
       
-      recordOpenStat(finalAmount); checkLevelUp(state.xp + 50);
+      // 3.2: XP зависит от цены кейса
+      const xpGained = 10 + Math.floor(caseObj.price / 5000);
+
+      await updateDoc(doc(db, 'users', currentUser.uid), { 
+        balance: increment(finalAmount), 
+        xp: increment(xpGained), 
+        totalOpened: increment(1), 
+        shards: increment(shardsEarned), 
+        openedCases: arrayUnion(caseObj.id) 
+      });
+      
+      recordOpenStat(finalAmount); checkLevelUp(state.xp + xpGained);
       if (prize.jackpot || finalAmount >= 10000000) sendGlobalMessage(`💎 Игрок ${currentUser.username} выбил ${finalAmount.toLocaleString('ru-RU')} ₽ в кейсе "${caseObj.name}"!`);
 
       const displayPrize = { ...prize, amount: finalAmount, globalJackpot: isGlobalJackpot };
@@ -186,7 +207,6 @@ function runRoulette(caseObj, prize, onComplete = null) {
 
 /* ==================== АПГРЕЙДЕР ==================== */
 const upModal = $('upgradeModal'), upAmount = $('upAmount'), upChance = $('upChance'), upStartBtn = $('upStartBtn');
-
 if ($('upgradeBtn')) {
   $('upgradeBtn').onclick = () => {
     $('upBalance').textContent = state.balance.toLocaleString('ru-RU') + ' ₽';
@@ -196,7 +216,6 @@ if ($('upgradeBtn')) {
   };
 }
 if ($('closeUpgrade')) $('closeUpgrade').onclick = () => upModal.classList.remove('active');
-
 function updateUpCalc() {
   const chance = parseInt(upChance.value);
   $('upChanceText').textContent = chance + '%'; $('upMultiText').textContent = 'x' + (100 / chance).toFixed(2);
@@ -206,22 +225,17 @@ function updateUpCalc() {
 if (upChance) upChance.oninput = updateUpCalc;
 if (upAmount) upAmount.oninput = updateUpCalc;
 if ($('upMaxBtn')) $('upMaxBtn').onclick = () => { upAmount.value = state.balance; updateUpCalc(); };
-
 if (upStartBtn) {
   upStartBtn.onclick = async () => {
     const amount = parseFloat(upAmount.value), chance = parseInt(upChance.value);
     if (!amount || amount <= 0) return toast('Введите сумму');
     if (amount > state.balance) return toast('Недостаточно средств');
-
     upStartBtn.disabled = true; upStartBtn.textContent = 'ИГРАЕМ...'; $('upAnimBar').style.display = 'block';
     await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-amount) });
-
     const animInterval = setInterval(() => { $('upAnimFill').style.width = Math.random() * 100 + '%'; }, 100);
-
     setTimeout(async () => {
       clearInterval(animInterval); $('upAnimFill').style.width = '0%';
       const isWin = Math.random() * 100 < chance;
-      
       if (isWin) {
         const winAmount = Math.floor(amount * (100 / chance));
         await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(winAmount) });
@@ -249,10 +263,8 @@ const WHEEL_PRIZES = [
   { type: 'money', amount: 100000, weight: 1, label: '100 000 ₽' }
 ];
 let isSpinning = false;
-
 if ($('wheelBtn')) $('wheelBtn').onclick = () => { $('wheelModal').classList.add('active'); checkWheelCooldown(); };
 if ($('closeWheel')) $('closeWheel').onclick = () => $('wheelModal').classList.remove('active');
-
 function checkWheelCooldown() {
   const btn = $('spinWheelBtn'); if (!btn) return;
   const lastSpin = state.userData.lastWheel ? state.userData.lastWheel.toMillis() : 0;
@@ -263,24 +275,20 @@ function checkWheelCooldown() {
   } else { btn.disabled = false; btn.textContent = 'КРУТИТЬ БЕСПЛАТНО'; btn.style.background = 'linear-gradient(145deg, #b26bff, #7c3aed)'; }
 }
 setInterval(() => { if ($('wheelModal')?.classList.contains('active') && !isSpinning) checkWheelCooldown(); }, 1000);
-
 function getRandomPrize() {
   const total = WHEEL_PRIZES.reduce((s, p) => s + p.weight, 0); let r = Math.random() * total;
   for (const p of WHEEL_PRIZES) { if (r < p.weight) return p; r -= p.weight; }
   return WHEEL_PRIZES[0];
 }
-
 if ($('spinWheelBtn')) {
   $('spinWheelBtn').onclick = async () => {
     if (isSpinning) return;
     const lastSpin = state.userData.lastWheel ? state.userData.lastWheel.toMillis() : 0;
     if (Date.now() - lastSpin < WHEEL_COOLDOWN && lastSpin !== 0) return;
-
     isSpinning = true; const btn = $('spinWheelBtn');
     btn.disabled = true; btn.textContent = 'КРУТИМ...'; $('wheelResult').textContent = '';
     $('wheelGraphic').style.transform = `rotate(${1080 + Math.floor(Math.random() * 360)}deg)`;
     const prize = getRandomPrize();
-
     setTimeout(async () => {
       try {
         await updateDoc(doc(db, 'users', currentUser.uid), { lastWheel: serverTimestamp() });
@@ -305,21 +313,21 @@ if ($('spinWheelBtn')) {
 
 /* ==================== КРАФТ ==================== */
 const CRAFT_CASES = [
-  { id: 'exclusive_1', name: 'Эксклюзивный 1', icon: '📦', cost: 100 },
-  { id: 'exclusive_2', name: 'Эксклюзивный 2', icon: '🎁', cost: 500 },
-  { id: 'exclusive_3', name: 'Эксклюзивный 3', icon: '💎', cost: 2500 },
-  { id: 'tester', name: 'Кейс Тестера', icon: '🛠️', cost: 100000 }
+  { id: 'exclusive_1', name: 'Эксклюзивный 1', icon: '📦', cost: 25000 },
+  { id: 'exclusive_2', name: 'Эксклюзивный 2', icon: '🎁', cost: 50000 },
+  { id: 'exclusive_3', name: 'Эксклюзивный 3', icon: '💎', cost: 100000 },
+  { id: 'exclusive_4', name: 'Эксклюзивный 4', icon: '🔮', cost: 250000 },
+  { id: 'tester', name: 'Кейс Тестера', icon: '🛠️', cost: 1000000 }
 ];
 const CRAFT_DROPS = {
   exclusive_1: [{ amount: 50000, chance: 50 }, { amount: 150000, chance: 30 }, { amount: 500000, chance: 15 }, { amount: 2000000, chance: 5, jackpot: true }],
   exclusive_2: [{ amount: 250000, chance: 45 }, { amount: 800000, chance: 30 }, { amount: 2500000, chance: 20 }, { amount: 10000000, chance: 5, jackpot: true }],
   exclusive_3: [{ amount: 1000000, chance: 40 }, { amount: 5000000, chance: 35 }, { amount: 20000000, chance: 20 }, { amount: 100000000, chance: 5, jackpot: true }],
+  exclusive_4: [{ amount: 5000000, chance: 40 }, { amount: 25000000, chance: 30 }, { amount: 100000000, chance: 20 }, { amount: 500000000, chance: 8, big: true }, { amount: 2000000000, chance: 2, jackpot: true }],
   tester: [{ amount: 5000000, chance: 50 }, { amount: 25000000, chance: 30 }, { amount: 100000000, chance: 15 }, { amount: 1000000000, chance: 5, jackpot: true }]
 };
-
 if ($('craftBtn')) $('craftBtn').onclick = () => { updateCraftUI(); $('craftModal').classList.add('active'); };
 if ($('closeCraft')) $('closeCraft').onclick = () => $('craftModal').classList.remove('active');
-
 function updateCraftUI() {
   const shards = state.userData.shards || 0;
   if ($('craftShards')) $('craftShards').textContent = shards.toLocaleString('ru-RU') + ' 🔹';
@@ -333,16 +341,13 @@ function updateCraftUI() {
     </div>`;
   }).join('');
 }
-
 window.craftCase = async (id, cost) => {
   if ((state.userData.shards || 0) < cost) return toast('Мало осколков!');
   await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-cost) });
   toast('Кейс скрафчен!'); $('craftModal').classList.remove('active');
-  
   const prize = rollDrop(CRAFT_DROPS[id], activeEvent.luck);
   const pBonus = 1 + ((state.userData.prestige || 0) * 0.02);
   let final = Math.floor(prize.amount * activeEvent.multiplier * pBonus);
-  
   await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(final), xp: increment(250), totalOpened: increment(1) });
   runRoulette({ name: CRAFT_CASES.find(c => c.id === id).name, drops: CRAFT_DROPS[id] }, { ...prize, amount: final }, () => updateCraftUI());
 };
@@ -350,13 +355,11 @@ window.craftCase = async (id, cost) => {
 /* ==================== ПРЕСТИЖ ==================== */
 if ($('prestigeBtn')) {
   $('prestigeBtn').onclick = async () => {
-    if (state.level < 300) return toast('Нужен 300 уровень!');
+    if (state.level < 500) return toast('Нужен 500 уровень!'); // Изменено на 500
     if (!confirm('Обнулить прогресс и получить престиж?')) return;
-    
     const newPrestige = (state.userData.prestige || 0) + 1;
     await updateDoc(doc(db, 'users', currentUser.uid), { balance: 0, level: 1, xp: 0, prestige: newPrestige });
     state.balance = 0; state.level = 1; state.xp = 0; state.userData.prestige = newPrestige;
-    
     updateBalanceUI(); $('profPrestige').textContent = newPrestige; $('profLevel').textContent = 'Уровень 1';
     toast(`🌟 Престиж: ${newPrestige}`); $('profileModal').classList.remove('active');
     renderCases();
@@ -370,53 +373,46 @@ const AVATARS = [
   { id: 'dog', icon: '🐶', price: 50000, name: 'Собачка' },
   { id: 'lion', icon: '🦁', price: 250000, name: 'Лев' },
   { id: 'dragon', icon: '🐉', price: 1000000, name: 'Дракон' },
-  { id: 'alien', icon: '👽', price: 5000000, name: 'Пришелец' }
+  { id: 'alien', icon: '👽', price: 5000000, name: 'Пришелец' },
+  // 3.2 Новые аватарки
+  { id: 'god', icon: '🗿', price: 100000000, name: 'Божество' },
+  { id: 'void', icon: '🕳️', price: 1000000000, name: 'Пустота' }
 ];
-
 const FRAMES = [
   { id: 'none', style: 'none', price: 0, name: 'Без рамки' },
   { id: 'blue', style: '0 0 10px #4da6ff', price: 100000, name: 'Синяя' },
   { id: 'gold', style: '0 0 15px #ffd700', price: 500000, name: 'Золотая' },
   { id: 'neon', style: '0 0 20px #b26bff', price: 2000000, name: 'Неоновая' },
-  { id: 'fire', style: '0 0 25px #ff4500, 0 0 10px #ff0000', price: 10000000, name: 'Огненная' }
+  { id: 'fire', style: '0 0 25px #ff4500, 0 0 10px #ff0000', price: 10000000, name: 'Огненная' },
+  // 3.2 Новые рамки
+  { id: 'cosmic', style: '0 0 30px #00ffff, 0 0 10px #ff00ff', price: 100000000, name: 'Космическая' },
+  { id: 'void_frame', style: '0 0 40px #000, 0 0 20px #fff', price: 1000000000, name: 'Абсолютная' }
 ];
-
 function initShop() {
   if (!$('shopAvatars') || !$('shopFrames')) return;
-  
   $('shopAvatars').innerHTML = AVATARS.map(a => {
     const owned = (state.userData.ownedAvatars || []).includes(a.id) || a.price === 0;
     const equipped = (state.userData.avatar || '👤') === a.icon;
     return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="buyAvatar('${a.id}', ${a.price}, '${a.icon}')">
-      <div style="font-size:2rem;">${a.icon}</div>
-      <div style="font-size:0.75rem; color:#fff; margin-top:5px;">${a.name}</div>
-      <div style="font-size:0.75rem; color:${owned ? '#22c55e' : '#ffd700'}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : a.price.toLocaleString('ru-RU') + ' ₽'}</div>
-    </div>`;
+      <div style="font-size:2rem;">${a.icon}</div><div style="font-size:0.75rem; color:#fff; margin-top:5px;">${a.name}</div>
+      <div style="font-size:0.75rem; color:${owned ? '#22c55e' : '#ffd700'}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : a.price.toLocaleString('ru-RU') + ' ₽'}</div></div>`;
   }).join('');
-
   $('shopFrames').innerHTML = FRAMES.map(f => {
     const owned = (state.userData.ownedFrames || []).includes(f.id) || f.price === 0;
     const equipped = (state.userData.frame || 'none') === f.id;
     return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="buyFrame('${f.id}', ${f.price}, '${f.style}')">
       <div style="width:40px; height:40px; border-radius:50%; background:#16203a; margin:0 auto; border:2px solid #fff; box-shadow:${f.style};"></div>
       <div style="font-size:0.75rem; color:#fff; margin-top:5px;">${f.name}</div>
-      <div style="font-size:0.75rem; color:${owned ? '#22c55e' : '#ffd700'}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : f.price.toLocaleString('ru-RU') + ' ₽'}</div>
-    </div>`;
+      <div style="font-size:0.75rem; color:${owned ? '#22c55e' : '#ffd700'}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : f.price.toLocaleString('ru-RU') + ' ₽'}</div></div>`;
   }).join('');
 }
-
 if ($('shopBtn')) $('shopBtn').onclick = () => { initShop(); $('shopModal').classList.add('active'); };
 if ($('closeShop')) $('closeShop').onclick = () => $('shopModal').classList.remove('active');
-
 window.buyAvatar = async (id, price, icon) => {
   const owned = (state.userData.ownedAvatars || []).includes(id) || price === 0;
   if (!owned) {
     if (state.balance < price) return toast('Недостаточно средств!');
-    await updateDoc(doc(db, 'users', currentUser.uid), { 
-      balance: increment(-price), 
-      ownedAvatars: arrayUnion(id), 
-      avatar: icon 
-    });
+    await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedAvatars: arrayUnion(id), avatar: icon });
     toast('Аватарка куплена и надета!');
   } else {
     await updateDoc(doc(db, 'users', currentUser.uid), { avatar: icon });
@@ -424,16 +420,11 @@ window.buyAvatar = async (id, price, icon) => {
   }
   initShop();
 };
-
 window.buyFrame = async (id, price, style) => {
   const owned = (state.userData.ownedFrames || []).includes(id) || price === 0;
   if (!owned) {
     if (state.balance < price) return toast('Недостаточно средств!');
-    await updateDoc(doc(db, 'users', currentUser.uid), { 
-      balance: increment(-price), 
-      ownedFrames: arrayUnion(id), 
-      frame: id 
-    });
+    await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedFrames: arrayUnion(id), frame: id });
     toast('Рамка куплена и надета!');
   } else {
     await updateDoc(doc(db, 'users', currentUser.uid), { frame: id });
@@ -446,13 +437,10 @@ window.buyFrame = async (id, price, style) => {
 if ($('profileBtn')) {
   $('profileBtn').onclick = () => {
     $('profName').textContent = currentUser.username;
-    $('profLevel').textContent = `Уровень ${state.level} (${state.xp % 1000} / 1000 XP)`;
+    $('profLevel').textContent = `Уровень ${state.level} (${state.xp % 1000} / ${Math.floor(50 * Math.pow(state.level, 2.5))} XP)`;
     $('profPrestige').textContent = state.userData.prestige || 0;
-    
-    // Отображение аватарки в профиле
     const av = state.userData.avatar || '👤';
     const frameStyle = FRAMES.find(f => f.id === (state.userData.frame || 'none'))?.style || 'none';
-    
     let profAvEl = $('profAvatar');
     if (!profAvEl) {
       profAvEl = document.createElement('div');
@@ -460,28 +448,24 @@ if ($('profileBtn')) {
       profAvEl.style = 'width:80px; height:80px; border-radius:50%; background:#16203a; margin:0 auto 10px; display:flex; align-items:center; justify-content:center; font-size:3rem;';
       $('profName').parentNode.insertBefore(profAvEl, $('profName'));
     }
-    profAvEl.textContent = av;
-    profAvEl.style.boxShadow = frameStyle;
-
+    profAvEl.textContent = av; profAvEl.style.boxShadow = frameStyle;
     if ($('prestigeBtn')) {
-      if (state.level >= 300) { $('prestigeBtn').disabled = false; $('prestigeBtn').textContent = 'Переродиться'; }
-      else { $('prestigeBtn').disabled = true; $('prestigeBtn').textContent = `Нужен 300 ур.`; }
+      if (state.level >= 500) { $('prestigeBtn').disabled = false; $('prestigeBtn').textContent = 'Переродиться'; }
+      else { $('prestigeBtn').disabled = true; $('prestigeBtn').textContent = `Нужен 500 ур.`; }
     }
-    
     checkAchievements();
     const ql = $('questsList');
     if (ql && state.userData.quests) {
       ql.innerHTML = DAILY_QUESTS.map(q => `<div style="margin-bottom:8px; padding:8px; background:rgba(255,255,255,0.05); border-radius:8px;">
         <div>${q.title} (${state.userData.quests[q.id]?.progress || 0}/${q.target})</div>
-        <div style="font-size:0.75rem; color:#8ba3c7;">Награда: ${q.rewardMoney}₽ + ${q.rewardXp}XP</div>
-      </div>`).join('');
+        <div style="font-size:0.75rem; color:#8ba3c7;">Награда: ${q.rewardMoney}₽ + ${q.rewardXp}XP</div></div>`).join('');
     }
     $('profileModal').classList.add('active');
   };
 }
 if ($('closeProfile')) $('closeProfile').onclick = () => $('profileModal').classList.remove('active');
 
-/* ==================== ОСТАЛЬНЫЕ КНОПКИ ==================== */
+/* ==================== UI ==================== */
 const logoutBtn = $('logoutBtn'); if (logoutBtn) logoutBtn.onclick = () => signOut(auth).then(() => location.href = 'index.html');
 const lbBtn = $('lbBtn'); if (lbBtn) lbBtn.onclick = () => openLeaderboard();
 const closeLb = $('closeLb'); if (closeLb) closeLb.onclick = () => $('lbModal').classList.remove('active');
@@ -490,7 +474,6 @@ const closeFriends = $('closeFriends'); if (closeFriends) closeFriends.onclick =
 const closeChat = $('closeChat'); if (closeChat) closeChat.onclick = () => $('chatModal').classList.remove('active');
 const closeGift = $('closeGift'); if (closeGift) closeGift.onclick = () => $('giftModal').classList.remove('active');
 const promoBtn = $('promoBtn'); if (promoBtn) promoBtn.onclick = () => { usePromo($('promoInput').value); $('promoInput').value = ''; };
-
 if ($('clanBtn')) $('clanBtn').onclick = () => $('clanModal').classList.add('active');
 if ($('closeClan')) $('closeClan').onclick = () => $('clanModal').classList.remove('active');
 if ($('globalChatBtn')) $('globalChatBtn').onclick = () => $('globalChatModal').classList.add('active');
