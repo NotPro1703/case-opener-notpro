@@ -160,10 +160,10 @@ async function buyCase(caseObj, qty, isSyndicate = false) {
       const prize = rollDrop(caseObj.drops, activeEvent.luck * weatherLuck);
       
       let finalAmount = isGlobalJackpot && jpWinAmount > 0 ? jpWinAmount : prize.amount;
-      if (!isGlobalJackpot) { const prestigeBonus = 1 + ((state.userData.prestige || 0) * 0.02); finalAmount = Math.floor(finalAmount * activeEvent.multiplier * prestigeBonus); }
+      if (!isGlobalJackpot) { const prestigeBonus = 1 + ((state.userData.prestige || 0) * 1.5); finalAmount = Math.floor(finalAmount * activeEvent.multiplier * prestigeBonus); }
       
-      const shardsEarned = Math.max(1, Math.floor(caseObj.price / 1000));
-      const xpGained = 10 + Math.floor(caseObj.price / 5000);
+      const shardsEarned = Math.max(5, Math.floor(caseObj.price / 1000));
+      const xpGained = 10 + Math.floor(caseObj.price / 1000);
 
       await updateDoc(doc(db, 'users', currentUser.uid), { 
         balance: increment(finalAmount), 

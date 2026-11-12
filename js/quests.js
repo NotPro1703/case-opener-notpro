@@ -17,14 +17,14 @@ export const ACHIEVEMENTS = [
 
 export function checkLevelUp(newXp) {
   let level = 1;
-  let xpNeeded = 50;
+  let xpNeeded = 10;
   let totalXpForLevel = 0;
 
   // Максимальный уровень 500, рост XP в 2.5 раза
   while (newXp >= totalXpForLevel + xpNeeded && level < 500) {
     totalXpForLevel += xpNeeded;
     level++;
-    xpNeeded = Math.floor(50 * Math.pow(level, 1.5)); 
+    xpNeeded = Math.floor(10 * Math.pow(level, 1.5)); 
   }
 
   if (level > state.level) {
