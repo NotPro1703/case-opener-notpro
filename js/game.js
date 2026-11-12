@@ -36,7 +36,6 @@ export function updateBalanceUI() {
   if ($('playerLevel')) $('playerLevel').textContent = state.level;
   
   if ($('playerXp')) {
-    // Считаем, сколько опыта нужно для текущего уровня
     let xpNeededForCurrent = 50;
     let totalXpBefore = 0;
     for (let i = 1; i < state.level; i++) {
@@ -44,10 +43,7 @@ export function updateBalanceUI() {
       xpNeededForCurrent = Math.floor(50 * Math.pow(i + 1, 2.5));
     }
     
-    // Сколько нужно для следующего
     let xpNeededForNext = Math.floor(50 * Math.pow(state.level, 2.5));
-    
-    // Текущий прогресс
     const currentXpInLevel = Math.max(0, state.xp - totalXpBefore);
     $('playerXp').textContent = `${currentXpInLevel} / ${xpNeededForNext} XP`;
   }
@@ -120,7 +116,12 @@ function renderCases() {
   Object.values(CASES).forEach(c => {
     const card = document.createElement('div'); card.className = 'case-card';
     const isFree = c.price === 0;
-    const isLocked = c.reqLevel && state.level < c.reqLevel;
+    
+    // Проверка уровня и престижа
+    const isLockedByLevel = c.reqLevel && state.level < c.reqLevel;
+    const isLockedByPrestige = c.reqPrestige && (state.userData.prestige || 0) < c.reqPrestige;
+    const isLocked = isLockedByLevel || isLockedByPrestige;
+
     let onCooldown = false;
     if (isFree) {
       const lastOpen = c.id === 'daily' ? state.userData.lastDaily : state.userData.lastHourly;
@@ -129,7 +130,11 @@ function renderCases() {
     
     card.innerHTML = `
       <div class="case-icon">${c.icon}</div><div class="case-name">${c.name}</div>
-      ${c.reqLevel ? `<div style="font-size:0.75rem;color:${isLocked?'#ff6b6b':'#22c55e'}">${isLocked ? '🔒 ' : '✅ '} ${c.reqLevel} ур.</div>` : ''}
+      ${c.reqLevel || c.reqPrestige ? `<div style="font-size:0.75rem;color:${isLocked?'#ff6b6b':'#22c55e'}">
+        ${isLocked ? '🔒 ' : '✅ '} 
+        ${c.reqLevel ? c.reqLevel + ' ур. ' : ''} 
+        ${c.reqPrestige ? '⭐' + c.reqPrestige + ' престиж' : ''}
+      </div>` : ''}
       <div class="case-price ${isFree ? 'free' : ''}">${isFree ? 'Бесплатно' : c.price.toLocaleString('ru-RU') + ' ₽'}</div>
       <div class="case-buy" style="flex-direction:column; gap:5px;">
         ${isFree ? '' : `<select class="qty-select" ${isLocked?'disabled':''}>${Array.from({length:5},(_,i)=>`<option>${i+1}</option>`).join('')}</select>`}
@@ -381,7 +386,6 @@ const CRAFT_DROPS = {
   tester: [{ amount: 5000000, chance: 50 }, { amount: 25000000, chance: 30 }, { amount: 100000000, chance: 15 }, { amount: 1000000000, chance: 5, jackpot: true }]
 };
 
-// ЭКСПОРТ ДЛЯ ИНВЕНТАРЯ
 window.CRAFT_CASES = CRAFT_CASES;
 window.CRAFT_DROPS = CRAFT_DROPS;
 
