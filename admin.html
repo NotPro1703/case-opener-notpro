@@ -34,6 +34,9 @@
       <input type="number" id="amountPrestige" placeholder="Престиж ⭐">
     </div>
     <div class="input-row">
+      <input type="number" id="amountSchool" placeholder="Школьные листы 📄">
+    </div>
+    <div class="input-row">
       <button onclick="giveReward()" style="width: 100%;">Выдать</button>
     </div>
   </div>
@@ -94,6 +97,7 @@ window.giveReward = async () => {
   const xp = parseInt(document.getElementById('amountXp').value) || 0;
   const shards = parseInt(document.getElementById('amountShards').value) || 0;
   const prestige = parseInt(document.getElementById('amountPrestige').value) || 0;
+  const school = parseInt(document.getElementById('amountSchool').value) || 0;
   
   const uid = await findUidByName(name);
   if (!uid) return alert('Игрок не найден');
@@ -101,16 +105,17 @@ window.giveReward = async () => {
   const uDoc = await getDoc(doc(db, 'users', uid));
   const uData = uDoc.data();
   const newXp = (uData.xp || 0) + xp;
-  const newLevel = Math.min(300, Math.floor(newXp / 1000) + 1);
+  const newLevel = Math.min(500, Math.floor(newXp / 1000) + 1); // Ограничение до 500
 
   await updateDoc(doc(db, 'users', uid), {
     balance: (uData.balance || 0) + money,
     xp: newXp,
     level: newLevel,
     shards: (uData.shards || 0) + shards,
-    prestige: (uData.prestige || 0) + prestige
+    prestige: (uData.prestige || 0) + prestige,
+    schoolPoints: (uData.schoolPoints || 0) + school // ВЫДАЧА ЛИСТОВ
   });
-  alert(`Выдано: ${money}₽, ${xp}XP, ${shards} осколков, ${prestige} престижа.`);
+  alert(`Выдано: ${money}₽, ${xp}XP, ${shards} осколков, ${prestige} престижа, ${school} листов 📄.`);
 };
 
 window.startEvent = async () => {
