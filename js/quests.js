@@ -15,20 +15,23 @@ export const ACHIEVEMENTS = [
   { id: 'level_10', title: 'Опытный', desc: 'Достигни 10 уровня', icon: '⭐', check: (d) => (d.level || 1) >= 10 }
 ];
 
-export function checkLevelUp(newXp) {
+// Проверка и повышение уровня
+export async function checkLevelUp(newXp) {
+  if (!currentUser) return;
+  
   let level = 1;
-  let xpNeeded = 10;
+  let xpNeeded = 50;
   let totalXpForLevel = 0;
 
-  // Максимальный уровень 500, рост XP в 2.5 раза
+  // Считаем уровень по формуле: 50 * (level ^ 2.5)
   while (newXp >= totalXpForLevel + xpNeeded && level < 500) {
     totalXpForLevel += xpNeeded;
     level++;
-    xpNeeded = Math.floor(10 * Math.pow(level, 1.5)); 
+    xpNeeded = Math.floor(50 * Math.pow(level, 2.5));
   }
 
   if (level > state.level) {
-    updateDoc(doc(db, 'users', currentUser.uid), { level: level });
+    await updateDoc(doc(db, 'users', currentUser.uid), { level: level });
     toast(`🎉 Новый уровень: ${level}!`);
   }
 }

@@ -2,6 +2,7 @@ import { db } from './firebase-config.js';
 import { collection, doc, onSnapshot, deleteDoc, updateDoc, increment, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 import { state, currentUser, toast, runRoulette } from './game.js';
 import { CASES, rollDrop } from './cases-data.js';
+import { checkLevelUp } from './quests.js'; // Импорт проверки уровня
 
 const $ = id => document.getElementById(id);
 let inventoryItems = [];
@@ -34,7 +35,7 @@ export function initInventory() {
     tab.onclick = () => {
       document.querySelectorAll('.inv-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      activeTab = tab.dataset.tab; // cases, frames, avatar
+      activeTab = tab.dataset.tab;
       renderInventory();
     };
   });
@@ -91,17 +92,12 @@ function renderInventory() {
 
 /* ==================== ОТКРЫТИЕ КЕЙСА ==================== */
 window.openCaseFromInv = async (invItemId, caseId) => {
-  // 1. Ищем кейс в обычном магазине
   let c = CASES[caseId];
   let isCraft = false;
   
-  // 2. Если не нашли, ищем в крафте (переменные из game.js)
   if (!c && window.CRAFT_CASES && window.CRAFT_DROPS) {
     const cc = window.CRAFT_CASES.find(x => x.id === caseId);
-    if (cc) {
-      c = { name: cc.name, drops: window.CRAFT_DROPS[caseId] };
-      isCraft = true;
-    }
+    if (cc) { c = { name: cc.name, drops: window.CRAFT_DROPS[caseId] }; isCraft = true; }
   }
   
   if (!c) return toast('Ошибка: кейс не найден');
@@ -111,17 +107,21 @@ window.openCaseFromInv = async (invItemId, caseId) => {
     await deleteDoc(doc(db, 'inventory', currentUser.uid, 'items', invItemId));
     
     const prize = rollDrop(c.drops);
-    
-    // Если кейс крафченный — осколки за него не даем (защита от абуза)
     const shardsEarned = isCraft ? 0 : Math.max(1, Math.floor(500 / 1000));
-    
+    const xpGained = 10; // 10 XP за кейс
+
+    // Начисляем деньги, осколки, опыт
     await updateDoc(doc(db, 'users', currentUser.uid), { 
       balance: increment(prize.amount),
       shards: increment(shardsEarned),
       totalOpened: increment(1),
-      xp: increment(10)
+      xp: increment(xpGained)
     });
     
+    // Проверяем повышение уровня (берем текущий XP + прибавку)
+    const newTotalXp = (state.userData.xp || 0) + xpGained;
+    checkLevelUp(newTotalXp);
+
     runRoulette(c, prize, null, false);
   } catch (e) {
     console.error("Ошибка в openCaseFromInv:", e);
@@ -172,11 +172,9 @@ window.giftFromInv = async (invItemId, caseId) => {
 };
 
 window.sendGiftFromInv = async (toUid, toName, invItemId, caseId) => {
-  // Ищем кейс в обычном магазине или крафте
   let cName = 'Кейс', cIcon = '📦';
-  if (CASES[caseId]) {
-    cName = CASES[caseId].name; cIcon = CASES[caseId].icon;
-  } else if (window.CRAFT_CASES) {
+  if (CASES[caseId]) { cName = CASES[caseId].name; cIcon = CASES[caseId].icon; }
+  else if (window.CRAFT_CASES) {
     const cc = window.CRAFT_CASES.find(x => x.id === caseId);
     if (cc) { cName = cc.name; cIcon = cc.icon; }
   }

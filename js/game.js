@@ -36,14 +36,20 @@ export function updateBalanceUI() {
   if ($('playerLevel')) $('playerLevel').textContent = state.level;
   
   if ($('playerXp')) {
-    let xpNeeded = 50;
-    let totalXpForLevel = 0;
+    // Считаем, сколько опыта нужно для текущего уровня
+    let xpNeededForCurrent = 50;
+    let totalXpBefore = 0;
     for (let i = 1; i < state.level; i++) {
-      totalXpForLevel += xpNeeded;
-      xpNeeded = Math.floor(50 * Math.pow(i + 1, 2.5));
+      totalXpBefore += xpNeededForCurrent;
+      xpNeededForCurrent = Math.floor(50 * Math.pow(i + 1, 2.5));
     }
-    const currentXpInLevel = Math.max(0, state.xp - totalXpForLevel);
-    $('playerXp').textContent = `${currentXpInLevel} / ${xpNeeded} XP`;
+    
+    // Сколько нужно для следующего
+    let xpNeededForNext = Math.floor(50 * Math.pow(state.level, 2.5));
+    
+    // Текущий прогресс
+    const currentXpInLevel = Math.max(0, state.xp - totalXpBefore);
+    $('playerXp').textContent = `${currentXpInLevel} / ${xpNeededForNext} XP`;
   }
 }
 
@@ -375,7 +381,7 @@ const CRAFT_DROPS = {
   tester: [{ amount: 5000000, chance: 50 }, { amount: 25000000, chance: 30 }, { amount: 100000000, chance: 15 }, { amount: 1000000000, chance: 5, jackpot: true }]
 };
 
-// ЭКСПОРТ ДЛЯ ИНВЕНТАРЯ (очень важно!)
+// ЭКСПОРТ ДЛЯ ИНВЕНТАРЯ
 window.CRAFT_CASES = CRAFT_CASES;
 window.CRAFT_DROPS = CRAFT_DROPS;
 
