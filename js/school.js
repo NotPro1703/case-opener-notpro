@@ -1,19 +1,17 @@
 import { db } from './firebase-config.js';
-import { doc, updateDoc, increment, arrayUnion } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+import { doc, updateDoc, increment, arrayUnion, addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 import { state, currentUser, toast, runRoulette } from './game.js';
 
 const $ = id => document.getElementById(id);
 
 const START_POINTS = 100;
-
-// ИСПРАВЛЕННЫЙ физкультурный кейс (минимум 100 📄)
 const CASES = [
-  { id: 'phys_edu', name: 'Физкультурный', icon: '⚽', price: 100, drops: [{ amount: 100, chance: 50 }, { amount: 250, chance: 30 }, { amount: 350, chance: 15 }, { amount: 750, chance: 4 }, { amount: 5000, chance: 1 }] },
-  { id: 'math', name: 'Математический', icon: '🧮', price: 1000, drops: [{ amount: 750, chance: 45 }, { amount: 1500, chance: 30 }, { amount: 5000, chance: 15 }, { amount: 15000, chance: 8 }, { amount: 50000, chance: 2 }] },
-  { id: 'geo', name: 'Геометрический', icon: '📐', price: 3000, drops: [{ amount: 2500, chance: 40 }, { amount: 4000, chance: 30 }, { amount: 12000, chance: 20 }, { amount: 30000, chance: 8 }, { amount: 100000, chance: 2 }] },
-  { id: 'chem', name: 'Химический', icon: '🧪', price: 5555, drops: [{ amount: 3333, chance: 40 }, { amount: 7000, chance: 30 }, { amount: 20000, chance: 20 }, { amount: 60000, chance: 8 }, { amount: 200000, chance: 2 }] },
-  { id: 'phys', name: 'Физический', icon: '🍎', price: 12345, drops: [{ amount: 6789, chance: 40 }, { amount: 15000, chance: 30 }, { amount: 45000, chance: 20 }, { amount: 150000, chance: 8 }, { amount: 500000, chance: 2 }] },
-  { id: 'obzh', name: 'ОБЖ', icon: '🚑', price: 30000, drops: [{ amount: 25000, chance: 40 }, { amount: 40000, chance: 30 }, { amount: 120000, chance: 20 }, { amount: 400000, chance: 8 }, { amount: 3500000, chance: 2 }] }
+  { id: 'phys_edu', name: 'Физкультурный', icon: '⚽', price: 100, drops: [{ amount: 100, chance: 50 }, { amount: 150, chance: 30 }, { amount: 300, chance: 15 }, { amount: 500, chance: 5 }] },
+  { id: 'math', name: 'Математический', icon: '🧮', price: 1000, drops: [{ amount: 500, chance: 45 }, { amount: 1500, chance: 30 }, { amount: 5000, chance: 15 }, { amount: 15000, chance: 8 }, { amount: 50000, chance: 2 }] },
+  { id: 'geo', name: 'Геометрический', icon: '📐', price: 3000, drops: [{ amount: 1000, chance: 40 }, { amount: 4000, chance: 30 }, { amount: 12000, chance: 20 }, { amount: 30000, chance: 8 }, { amount: 100000, chance: 2 }] },
+  { id: 'chem', name: 'Химический', icon: '🧪', price: 5555, drops: [{ amount: 2000, chance: 40 }, { amount: 7000, chance: 30 }, { amount: 20000, chance: 20 }, { amount: 60000, chance: 8 }, { amount: 200000, chance: 2 }] },
+  { id: 'phys', name: 'Физический', icon: '🍎', price: 12345, drops: [{ amount: 5000, chance: 40 }, { amount: 15000, chance: 30 }, { amount: 45000, chance: 20 }, { amount: 150000, chance: 8 }, { amount: 500000, chance: 2 }] },
+  { id: 'obzh', name: 'ОБЖ', icon: '🚑', price: 30000, drops: [{ amount: 10000, chance: 40 }, { amount: 40000, chance: 30 }, { amount: 120000, chance: 20 }, { amount: 400000, chance: 8 }, { amount: 1500000, chance: 2 }] }
 ];
 
 const AVATARS = [
@@ -60,7 +58,6 @@ export function initSchool() {
     };
   });
 
-  // Выдаем стартовые 100 листов, если их нет
   if (state.userData.schoolPoints === undefined) {
     updateDoc(doc(db, 'users', currentUser.uid), { schoolPoints: START_POINTS }).catch(e => console.log(e));
   }
@@ -80,14 +77,14 @@ function updateSchoolUI() {
       <div style="display:flex; align-items:center; gap:10px; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px; margin-bottom:8px;">
         <div style="font-size:1.5rem;">${c.icon}</div>
         <div style="flex:1;"><div style="font-weight:bold;">${c.name}</div><div style="color:#ffd700; font-size:0.8rem;">${c.price.toLocaleString('ru-RU')} 📄</div></div>
-        <button class="btn" style="width:auto; padding:6px 12px;" onclick="buySchoolCase('${c.id}')">Открыть</button>
+        <button class="btn" style="width:auto; padding:6px 12px;" onclick="window.buySchoolCase('${c.id}')">Открыть</button>
       </div>
     `).join('');
   } else if (activeTab === 'avatars') {
     list.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(70px, 1fr)); gap:10px;">
       ${AVATARS.map(a => {
         const owned = (state.userData.ownedAvatars || []).includes(a.id);
-        return `<div style="text-align:center; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px; cursor:pointer;" onclick="buySchoolAvatar('${a.id}', ${a.price}, '${a.icon}')">
+        return `<div style="text-align:center; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px; cursor:pointer;" onclick="window.buySchoolAvatar('${a.id}', ${a.price}, '${a.icon}')">
           <div style="font-size:1.5rem;">${a.icon}</div>
           <div style="font-size:0.7rem; color:${owned ? '#22c55e' : '#ffd700'};">${owned ? 'Куплено' : a.price.toLocaleString('ru-RU') + ' 📄'}</div>
         </div>`;
@@ -99,7 +96,7 @@ function updateSchoolUI() {
       return `<div style="display:flex; align-items:center; gap:10px; padding:10px; background:rgba(255,255,255,0.05); border-radius:10px; margin-bottom:8px;">
         <div style="width:30px; height:30px; border-radius:50%; background:#16203a; border:2px solid #fff; box-shadow:${f.style};"></div>
         <div style="flex:1;"><div style="font-weight:bold; font-size:0.9rem;">${f.name}</div><div style="color:#ffd700; font-size:0.8rem;">${f.price.toLocaleString('ru-RU')} 📄</div></div>
-        <button class="btn" style="width:auto; padding:6px 12px; background:${owned ? '#4b5563' : 'linear-gradient(145deg, #3d8bff, #2563eb)'};" onclick="buySchoolFrame('${f.id}', ${f.price}, '${f.style}')">${owned ? 'Куплено' : 'Купить'}</button>
+        <button class="btn" style="width:auto; padding:6px 12px; background:${owned ? '#4b5563' : 'linear-gradient(145deg, #3d8bff, #2563eb)'};" onclick="window.buySchoolFrame('${f.id}', ${f.price}, '${f.style}')">${owned ? 'Куплено' : 'Купить'}</button>
       </div>`;
     }).join('');
   }
@@ -121,7 +118,7 @@ window.buySchoolCase = async (caseId) => {
     await updateDoc(doc(db, 'users', currentUser.uid), { schoolPoints: increment(prize.amount) });
     
     const fakeCase = { name: c.name, drops: c.drops.map(d => ({ ...d, amount: d.amount })) };
-    runRoulette(fakeCase, prize, null, true); // 4-й аргумент isSchool = true
+    runRoulette(fakeCase, prize, null, true);
     
     updateSchoolUI();
   } catch (e) {
@@ -131,18 +128,15 @@ window.buySchoolCase = async (caseId) => {
 };
 
 window.buySchoolAvatar = async (id, price, icon) => {
-  if ((state.userData.ownedAvatars || []).includes(id)) {
-    await updateDoc(doc(db, 'users', currentUser.uid), { avatar: icon });
-    toast('Аватарка надета!');
-    updateSchoolUI();
-    return;
-  }
+  if ((state.userData.ownedAvatars || []).includes(id)) return toast('Уже куплено');
   if ((state.userData.schoolPoints || 0) < price) return toast('Мало листов 📄');
   
-  await updateDoc(doc(db, 'users', currentUser.uid), { 
-    schoolPoints: increment(-price), ownedAvatars: arrayUnion(id), avatar: icon 
+  await updateDoc(doc(db, 'users', currentUser.uid), { schoolPoints: increment(-price), ownedAvatars: arrayUnion(id) });
+  
+  await addDoc(collection(db, 'inventory', currentUser.uid, 'items'), {
+    type: 'avatar', name: 'Школьная аватарка', icon: icon, createdAt: serverTimestamp()
   });
-  toast('Аватарка куплена и надета!');
+  toast('Аватарка куплена! Надень её в инвентаре.');
   updateSchoolUI();
 };
 
@@ -150,9 +144,11 @@ window.buySchoolFrame = async (id, price, style) => {
   if ((state.userData.ownedFrames || []).includes(id)) return toast('Уже куплено');
   if ((state.userData.schoolPoints || 0) < price) return toast('Мало листов 📄');
 
-  await updateDoc(doc(db, 'users', currentUser.uid), { 
-    schoolPoints: increment(-price), ownedFrames: arrayUnion(id), frame: id 
+  await updateDoc(doc(db, 'users', currentUser.uid), { schoolPoints: increment(-price), ownedFrames: arrayUnion(id) });
+  
+  await addDoc(collection(db, 'inventory', currentUser.uid, 'items'), {
+    type: 'frame', name: FRAMES.find(f => f.id === id).name, frameId: id, frameStyle: style, createdAt: serverTimestamp()
   });
-  toast('Рамка куплена и надета!');
+  toast('Рамка куплена! Надень её в инвентаре.');
   updateSchoolUI();
 };

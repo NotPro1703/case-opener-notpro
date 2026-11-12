@@ -202,7 +202,7 @@ window.openGiftFriendSelect = (caseObj, qty) => {
     <div class="friend-item" style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(255,255,255,0.05); border-radius:12px; margin-bottom:8px;">
       <div class="friend-avatar" style="width:36px; height:36px; border-radius:50%; background:#b26bff; display:flex; align-items:center; justify-content:center; font-weight:bold;">${(f.username||'?')[0].toUpperCase()}</div>
       <div style="flex:1; font-weight:bold;">${f.username}</div>
-      <button class="btn" style="width:auto; padding:6px 12px; background:#22c55e;" onclick="sendGiftToFriend('${f.uid}', '${f.username}', '${caseObj.id}', ${qty})">Подарить</button>
+      <button class="btn" style="width:auto; padding:6px 12px; background:#22c55e;" onclick="window.sendGiftToFriend('${f.uid}', '${f.username}', '${caseObj.id}', ${qty})">Подарить</button>
     </div>
   `).join('');
 };
@@ -411,7 +411,7 @@ function renderCraftItem(c, shards) {
   return `<div style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.05); border-radius:12px;">
     <div style="width:40px; text-align:center;">${iconHtml}</div>
     <div style="flex:1;"><div style="font-weight:bold;">${c.name}</div><div style="font-size:0.8rem; color:#b26bff;">${c.cost.toLocaleString('ru-RU')} 🔹</div></div>
-    <button class="btn" style="width:auto; padding:8px 14px; background:${btnColor};" ${can ? '' : 'disabled'} onclick="craftItem('${c.id}', ${c.cost}, '${c.type}', '${c.iconId || c.frameStyle || ''}')">${btnText}</button>
+    <button class="btn" style="width:auto; padding:8px 14px; background:${btnColor};" ${can ? '' : 'disabled'} onclick="window.craftItem('${c.id}', ${c.cost}, '${c.type}', '${c.iconId || c.frameStyle || ''}')">${btnText}</button>
   </div>`;
 }
 
@@ -451,7 +451,7 @@ if ($('prestigeBtn')) {
   };
 }
 
-/* ==================== КАСТОМИЗАЦИЯ ==================== */
+/* ==================== КАСТОМИЗАЦИЯ (МАГАЗИН) ==================== */
 const AVATARS = [
   { id: 'default', icon: '👤', price: 0, name: 'Стандарт' },
   { id: 'cat', icon: '🐱', price: 50000, name: 'Котик' },
@@ -499,7 +499,7 @@ function initShop() {
     const owned = (state.userData.ownedAvatars || []).includes(a.id) || (a.price === 0 && a.shardPrice === undefined);
     const equipped = (state.userData.avatar || '👤') === a.icon;
     const costText = shopTab === 'money' ? `${a.price.toLocaleString('ru-RU')} ₽` : `${(a.shardPrice || 0).toLocaleString('ru-RU')} 🔹`;
-    return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="buyAvatar('${a.id}', ${a.price || 0}, ${a.shardPrice || 0}, '${a.icon}')">
+    return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="window.buyAvatar('${a.id}', ${a.price || 0}, ${a.shardPrice || 0}, '${a.icon}')">
       <div style="font-size:2rem;">${a.icon}</div><div style="font-size:0.75rem; color:#fff; margin-top:5px;">${a.name}</div>
       <div style="font-size:0.75rem; color:${owned ? '#22c55e' : (shopTab === 'money' ? '#ffd700' : '#b26bff')}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : costText}</div></div>`;
   }).join('');
@@ -508,7 +508,7 @@ function initShop() {
     const owned = (state.userData.ownedFrames || []).includes(f.id) || (f.price === 0 && f.shardPrice === undefined);
     const equipped = (state.userData.frame || 'none') === f.id;
     const costText = shopTab === 'money' ? `${f.price.toLocaleString('ru-RU')} ₽` : `${(f.shardPrice || 0).toLocaleString('ru-RU')} 🔹`;
-    return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="buyFrame('${f.id}', ${f.price || 0}, ${f.shardPrice || 0}, '${f.style}')">
+    return `<div style="text-align:center; cursor:pointer; padding:10px; background:${equipped ? 'rgba(77,166,255,0.2)' : 'rgba(255,255,255,0.05)'}; border:1px solid ${equipped ? '#4da6ff' : '#24344f'}; border-radius:10px;" onclick="window.buyFrame('${f.id}', ${f.price || 0}, ${f.shardPrice || 0}, '${f.style}')">
       <div style="width:40px; height:40px; border-radius:50%; background:#16203a; margin:0 auto; border:2px solid #fff; box-shadow:${f.style};"></div>
       <div style="font-size:0.75rem; color:#fff; margin-top:5px;">${f.name}</div>
       <div style="font-size:0.75rem; color:${owned ? '#22c55e' : (shopTab === 'money' ? '#ffd700' : '#b26bff')}; font-weight:bold;">${owned ? (equipped ? 'Надето' : 'Куплено') : costText}</div></div>`;
@@ -522,29 +522,38 @@ window.buyAvatar = async (id, price, shardPrice, icon) => {
   if (!owned) {
     if (price > 0) {
       if (state.balance < price) return toast('Недостаточно денег!');
-      await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedAvatars: arrayUnion(id), avatar: icon });
+      await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedAvatars: arrayUnion(id) });
     } else if (shardPrice > 0) {
       if ((state.userData.shards || 0) < shardPrice) return toast('Недостаточно осколков!');
-      await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-shardPrice), ownedAvatars: arrayUnion(id), avatar: icon });
+      await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-shardPrice), ownedAvatars: arrayUnion(id) });
     }
-    toast('Аватарка куплена и надета!');
+    
+    await addDoc(collection(db, 'inventory', currentUser.uid, 'items'), {
+      type: 'avatar', name: AVATARS.find(a => a.id === id).name || 'Аватарка', icon: icon, createdAt: serverTimestamp()
+    });
+    toast('Аватарка куплена! Надень её в инвентаре.');
   } else {
     await updateDoc(doc(db, 'users', currentUser.uid), { avatar: icon });
     toast('Аватарка надета!');
   }
   initShop();
 };
+
 window.buyFrame = async (id, price, shardPrice, style) => {
   const owned = (state.userData.ownedFrames || []).includes(id) || (price === 0 && shardPrice === 0);
   if (!owned) {
     if (price > 0) {
       if (state.balance < price) return toast('Недостаточно денег!');
-      await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedFrames: arrayUnion(id), frame: id });
+      await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(-price), ownedFrames: arrayUnion(id) });
     } else if (shardPrice > 0) {
       if ((state.userData.shards || 0) < shardPrice) return toast('Недостаточно осколков!');
-      await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-shardPrice), ownedFrames: arrayUnion(id), frame: id });
+      await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-shardPrice), ownedFrames: arrayUnion(id) });
     }
-    toast('Рамка куплена и надета!');
+    
+    await addDoc(collection(db, 'inventory', currentUser.uid, 'items'), {
+      type: 'frame', name: FRAMES.find(f => f.id === id).name || 'Рамка', frameId: id, frameStyle: style, createdAt: serverTimestamp()
+    });
+    toast('Рамка куплена! Надень её в инвентаре.');
   } else {
     await updateDoc(doc(db, 'users', currentUser.uid), { frame: id });
     toast('Рамка надета!');
@@ -584,7 +593,7 @@ if ($('profileBtn')) {
 }
 if ($('closeProfile')) $('closeProfile').onclick = () => $('profileModal').classList.remove('active');
 
-/* ==================== UI ==================== */
+/* ==================== UI КНОПКИ ==================== */
 const logoutBtn = $('logoutBtn'); if (logoutBtn) logoutBtn.onclick = () => signOut(auth).then(() => location.href = 'index.html');
 const lbBtn = $('lbBtn'); if (lbBtn) lbBtn.onclick = () => openLeaderboard();
 const closeLb = $('closeLb'); if (closeLb) closeLb.onclick = () => $('lbModal').classList.remove('active');
@@ -617,7 +626,7 @@ if ($('syndicateBtn')) $('syndicateBtn').onclick = () => {
       list.innerHTML += `<div style="display:flex; align-items:center; gap:10px; padding:10px; background:rgba(255,0,0,0.1); border-radius:10px;">
         <div style="font-size:1.5rem;">${c.icon}</div>
         <div style="flex:1;"><div>${c.name}</div><div style="color:#ff6b6b; font-size:0.8rem;">-30%</div></div>
-        <button class="btn" style="width:auto; padding:5px 10px; background:#dc2626;" onclick="buySyndicate('${c.id}')">Купить</button></div>`;
+        <button class="btn" style="width:auto; padding:5px 10px; background:#dc2626;" onclick="window.buySyndicate('${c.id}')">Купить</button></div>`;
     }
   });
   $('syndicateModal').classList.add('active');
