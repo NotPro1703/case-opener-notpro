@@ -20,7 +20,6 @@ export function initInventory() {
     $('closeInventory').onclick = () => $('inventoryModal').classList.remove('active');
   }
 
-  // Подписка на изменения в базе
   const itemsRef = collection(db, 'inventory', currentUser.uid, 'items');
   onSnapshot(itemsRef, (snap) => {
     inventoryItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -31,7 +30,6 @@ export function initInventory() {
     console.error("Ошибка загрузки инвентаря:", error);
   });
 
-  // Переключение вкладок
   document.querySelectorAll('.inv-tab').forEach(tab => {
     tab.onclick = () => {
       document.querySelectorAll('.inv-tab').forEach(t => t.classList.remove('active'));
@@ -46,7 +44,6 @@ function renderInventory() {
   const list = $('invList');
   if (!list) return;
 
-  // Фильтрация по вкладкам
   const filtered = inventoryItems.filter(i => {
     const type = i.type;
     return (activeTab === 'cases' && type === 'case') ||
@@ -60,7 +57,6 @@ function renderInventory() {
   }
 
   list.innerHTML = filtered.map(item => {
-    // === КЕЙС ===
     if (activeTab === 'cases') {
       return `
         <div class="inv-item" style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.05); border:1px solid #24344f; border-radius:12px; margin-bottom:8px;">
@@ -73,7 +69,6 @@ function renderInventory() {
           <button class="btn" style="width:auto; padding:6px 12px; background:#b26bff; margin-left:5px;" onclick="window.giftFromInv('${item.id}', '${item.caseId}')">🎁</button>
         </div>`;
     }
-    // === РАМКА ===
     if (activeTab === 'frames') {
       return `
         <div class="inv-item" style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.05); border:1px solid #24344f; border-radius:12px; margin-bottom:8px;">
@@ -82,7 +77,6 @@ function renderInventory() {
           <button class="btn" style="width:auto; padding:6px 12px; background:linear-gradient(145deg, #b26bff, #7c3aed);" onclick="window.equipFrame('${item.id}', '${item.frameId}')">Надеть</button>
         </div>`;
     }
-    // === АВАТАРКА ===
     if (activeTab === 'avatar') {
       return `
         <div class="inv-item" style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.05); border:1px solid #24344f; border-radius:12px; margin-bottom:8px;">
@@ -97,7 +91,19 @@ function renderInventory() {
 
 /* ==================== ОТКРЫТИЕ КЕЙСА ==================== */
 window.openCaseFromInv = async (invItemId, caseId) => {
-  const c = CASES[caseId];
+  // 1. Ищем кейс в обычном магазине
+  let c = CASES[caseId];
+  let isCraft = false;
+  
+  // 2. Если не нашли, ищем в крафте (переменные из game.js)
+  if (!c && window.CRAFT_CASES && window.CRAFT_DROPS) {
+    const cc = window.CRAFT_CASES.find(x => x.id === caseId);
+    if (cc) {
+      c = { name: cc.name, drops: window.CRAFT_DROPS[caseId] };
+      isCraft = true;
+    }
+  }
+  
   if (!c) return toast('Ошибка: кейс не найден');
 
   try {
@@ -106,10 +112,9 @@ window.openCaseFromInv = async (invItemId, caseId) => {
     
     const prize = rollDrop(c.drops);
     
-    // НАЧИСЛЯЕМ ОСКОЛКИ (1 осколок за каждые 1000₽)
-    const shardsEarned = Math.max(1, Math.floor(c.price / 1000));
+    // Если кейс крафченный — осколки за него не даем (защита от абуза)
+    const shardsEarned = isCraft ? 0 : Math.max(1, Math.floor(500 / 1000));
     
-    // Обновляем баланс, осколки, опыт и статистику
     await updateDoc(doc(db, 'users', currentUser.uid), { 
       balance: increment(prize.amount),
       shards: increment(shardsEarned),
@@ -167,11 +172,19 @@ window.giftFromInv = async (invItemId, caseId) => {
 };
 
 window.sendGiftFromInv = async (toUid, toName, invItemId, caseId) => {
-  const c = CASES[caseId];
+  // Ищем кейс в обычном магазине или крафте
+  let cName = 'Кейс', cIcon = '📦';
+  if (CASES[caseId]) {
+    cName = CASES[caseId].name; cIcon = CASES[caseId].icon;
+  } else if (window.CRAFT_CASES) {
+    const cc = window.CRAFT_CASES.find(x => x.id === caseId);
+    if (cc) { cName = cc.name; cIcon = cc.icon; }
+  }
+
   try {
     await deleteDoc(doc(db, 'inventory', currentUser.uid, 'items', invItemId));
     await addDoc(collection(db, 'inventory', toUid, 'items'), {
-      type: 'case', caseId: c.id, caseName: c.name, icon: c.icon, from: currentUser.username, createdAt: serverTimestamp()
+      type: 'case', caseId: caseId, caseName: cName, icon: cIcon, from: currentUser.username, createdAt: serverTimestamp()
     });
     toast(`Кейс подарен игроку ${toName}!`);
     $('friendsModal').classList.remove('active');

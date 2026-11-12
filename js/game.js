@@ -375,6 +375,10 @@ const CRAFT_DROPS = {
   tester: [{ amount: 5000000, chance: 50 }, { amount: 25000000, chance: 30 }, { amount: 100000000, chance: 15 }, { amount: 1000000000, chance: 5, jackpot: true }]
 };
 
+// ЭКСПОРТ ДЛЯ ИНВЕНТАРЯ (очень важно!)
+window.CRAFT_CASES = CRAFT_CASES;
+window.CRAFT_DROPS = CRAFT_DROPS;
+
 if ($('craftBtn')) $('craftBtn').onclick = () => { updateCraftUI(); $('craftModal').classList.add('active'); };
 if ($('closeCraft')) $('closeCraft').onclick = () => $('craftModal').classList.remove('active');
 
@@ -417,24 +421,32 @@ function renderCraftItem(c, shards) {
 
 window.craftItem = async (id, cost, type, data) => {
   if ((state.userData.shards || 0) < cost) return toast('Мало осколков!');
+  
   try {
     await updateDoc(doc(db, 'users', currentUser.uid), { shards: increment(-cost) });
+    
     if (type === 'case') {
-      toast('Кейс скрафчен!'); $('craftModal').classList.remove('active');
-      const prize = rollDrop(CRAFT_DROPS[id], activeEvent.luck);
-      const pBonus = 1 + ((state.userData.prestige || 0) * 0.02);
-      let final = Math.floor(prize.amount * activeEvent.multiplier * pBonus);
-      await updateDoc(doc(db, 'users', currentUser.uid), { balance: increment(final), xp: increment(250), totalOpened: increment(1) });
-      runRoulette({ name: CRAFT_CASES.find(c => c.id === id).name, drops: CRAFT_DROPS[id] }, { ...prize, amount: final }, () => updateCraftUI(), false);
+      await addDoc(collection(db, 'inventory', currentUser.uid, 'items'), {
+        type: 'case', caseId: id, caseName: CRAFT_CASES.find(c => c.id === id).name, icon: CRAFT_CASES.find(c => c.id === id).icon, createdAt: serverTimestamp()
+      });
+      toast('Кейс скрафчен! Он в инвентаре.');
     } 
     else if (type === 'avatar') {
-      await updateDoc(doc(db, 'users', currentUser.uid), { ownedAvatars: arrayUnion(id), avatar: data });
-      toast(`Аватарка "${data}" получена и надета!`); updateCraftUI();
+      await updateDoc(doc(db, 'users', currentUser.uid), { ownedAvatars: arrayUnion(id) });
+      await addDoc(collection(db, 'inventory', currentUser.uid, 'items'), {
+        type: 'avatar', name: CRAFT_CASES.find(c => c.id === id).name, icon: data, createdAt: serverTimestamp()
+      });
+      toast('Аватарка скрафчена! Надень её в инвентаре.');
     } 
     else if (type === 'frame') {
-      await updateDoc(doc(db, 'users', currentUser.uid), { ownedFrames: arrayUnion(id), frame: id });
-      toast(`Рамка скрафчена и надета!`); updateCraftUI();
+      await updateDoc(doc(db, 'users', currentUser.uid), { ownedFrames: arrayUnion(id) });
+      await addDoc(collection(db, 'inventory', currentUser.uid, 'items'), {
+        type: 'frame', name: CRAFT_CASES.find(c => c.id === id).name, frameId: id, frameStyle: data, createdAt: serverTimestamp()
+      });
+      toast('Рамка скрафчена! Надень её в инвентаре.');
     }
+    
+    updateCraftUI();
   } catch (e) { console.error(e); toast('Ошибка крафта'); }
 };
 
