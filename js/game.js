@@ -117,7 +117,6 @@ function renderCases() {
     const card = document.createElement('div'); card.className = 'case-card';
     const isFree = c.price === 0;
     
-    // Проверка уровня и престижа
     const isLockedByLevel = c.reqLevel && state.level < c.reqLevel;
     const isLockedByPrestige = c.reqPrestige && (state.userData.prestige || 0) < c.reqPrestige;
     const isLocked = isLockedByLevel || isLockedByPrestige;
@@ -130,17 +129,17 @@ function renderCases() {
     
     card.innerHTML = `
       <div class="case-icon">${c.icon}</div><div class="case-name">${c.name}</div>
-      ${c.reqLevel || c.reqPrestige ? `<div style="font-size:0.75rem;color:${isLocked?'#ff6b6b':'#22c55e'}">
+      ${c.reqLevel || c.reqPrestige ? `<div style="font-size:0.65rem;color:${isLocked?'#ff6b6b':'#22c55e'};text-align:center;line-height:1.1;">
         ${isLocked ? '🔒 ' : '✅ '} 
         ${c.reqLevel ? c.reqLevel + ' ур. ' : ''} 
-        ${c.reqPrestige ? '⭐' + c.reqPrestige + ' престиж' : ''}
+        ${c.reqPrestige ? '⭐' + c.reqPrestige + ' пр.' : ''}
       </div>` : ''}
       <div class="case-price ${isFree ? 'free' : ''}">${isFree ? 'Бесплатно' : c.price.toLocaleString('ru-RU') + ' ₽'}</div>
-      <div class="case-buy" style="flex-direction:column; gap:5px;">
+      <div class="case-buy">
         ${isFree ? '' : `<select class="qty-select" ${isLocked?'disabled':''}>${Array.from({length:5},(_,i)=>`<option>${i+1}</option>`).join('')}</select>`}
-        <div style="display:flex; gap:5px; width:100%;">
+        <div class="flex-row">
           <button class="btn buy-btn" ${onCooldown || isLocked ? 'disabled' : ''} style="flex:1;">${isLocked ? 'Заблокировано' : (onCooldown ? 'Ждите' : (isFree ? 'Получить' : 'Купить'))}</button>
-          ${isFree ? '' : `<button class="btn gift-btn" ${onCooldown || isLocked ? 'disabled' : ''} style="flex:1; background:#b26bff;">🎁</button>`}
+          ${isFree ? '' : `<button class="btn gift-btn" ${onCooldown || isLocked ? 'disabled' : ''} style="flex:0 0 30%; background:#b26bff;">🎁</button>`}
         </div>
       </div>`;
     grid.appendChild(card);
@@ -603,6 +602,7 @@ if ($('profileBtn')) {
       if (state.level >= 500) { $('prestigeBtn').disabled = false; $('prestigeBtn').textContent = 'Переродиться'; }
       else { $('prestigeBtn').disabled = true; $('prestigeBtn').textContent = `Нужен 500 ур.`; }
     }
+    renderStats(); // Обновляем статистику в профиле
     checkAchievements();
     const ql = $('questsList');
     if (ql && state.userData.quests) {
@@ -658,11 +658,26 @@ window.buySyndicate = (id) => { buyCase(CASES[id], 1, true); $('syndicateModal')
 
 function renderStats() {
   const s = JSON.parse(localStorage.getItem('co3_stats') || 'null') || { opened: 0, earned: 0, best: 0 };
-  if ($('stats')) $('stats').innerHTML = `
-    <div class="stat-card"><div class="s-label">Открыто</div><div class="s-value">${s.opened}</div></div>
-    <div class="stat-card"><div class="s-label">Выиграно</div><div class="s-value plus">${s.earned.toLocaleString('ru-RU')} ₽</div></div>
-    <div class="stat-card"><div class="s-label">Лучший дроп</div><div class="s-value gold">${s.best.toLocaleString('ru-RU')} ₽</div></div>`;
+  
+  const html = `
+    <div class="stat-card">
+      <div class="s-label">Открыто</div>
+      <div class="s-value">${s.opened}</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">Выиграно</div>
+      <div class="s-value plus">${s.earned.toLocaleString('ru-RU')} ₽</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">Лучший дроп</div>
+      <div class="s-value gold">${s.best.toLocaleString('ru-RU')} ₽</div>
+    </div>
+  `;
+
+  if ($('stats')) $('stats').innerHTML = html;
+  if ($('profStats')) $('profStats').innerHTML = html;
 }
+
 function recordOpenStat(amount) {
   const s = JSON.parse(localStorage.getItem('co3_stats') || 'null') || { opened: 0, earned: 0, best: 0 };
   s.opened++; s.earned += amount; if (amount > s.best) s.best = amount;
