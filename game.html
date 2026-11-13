@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Case Opener 3.3</title>
+<title>Case Opener 3.4</title>
 <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
 <header>
-  <div class="logo">🎁 Case Opener <span class="v">3.3</span></div>
+  <div class="logo">🎁 Case Opener <span class="v">3.4</span></div>
   <div class="header-spacer"></div>
   
   <div style="display:flex; flex-direction:column; align-items:flex-end; font-size:0.8rem; color:#8ba3c7; margin-right:10px;">
@@ -41,14 +41,12 @@
 </header>
 
 <main>
-  <!-- ПЛАШКА ИВЕНТА -->
-  <div id="eventBanner" style="display:none; background:linear-gradient(90deg, #ff8a00, #e52e71); border-radius:12px; padding:15px; margin-bottom:15px; text-align:center; box-shadow:0 4px 15px rgba(229,46,113,0.4);">
-    <div style="font-size:1.1rem; font-weight:bold; text-shadow:0 2px 4px rgba(0,0,0,0.5);" id="eventTitle">🔥 ГЛОБАЛЬНЫЙ ИВЕНТ!</div>
+  <div id="eventBanner" style="display:none; background:linear-gradient(90deg, #ff8a00, #e52e71); border-radius:12px; padding:15px; margin-bottom:15px; text-align:center;">
+    <div style="font-size:1.1rem; font-weight:bold;" id="eventTitle">🔥 ГЛОБАЛЬНЫЙ ИВЕНТ!</div>
     <div style="font-size:0.9rem; margin-top:5px;" id="eventDesc">Бонусы активны</div>
     <div style="font-size:1.2rem; font-weight:900; margin-top:5px; font-family:monospace;" id="eventTimer">00:00:00</div>
   </div>
 
-  <!-- ПЛАШКА ДЖЕКПОТА И ПОГОДЫ -->
   <div style="text-align:center; margin-bottom:15px; font-size:1.2rem; background:rgba(255,215,0,0.1); padding:10px; border-radius:12px; border:1px solid rgba(255,215,0,0.3);">
     💰 Джекпот: <b id="globalJackpot" style="color:#ffd700;">0 ₽</b> | 
     🌤 Погода: <b id="weatherStatus" style="color:#4da6ff;">Ясно</b>
@@ -67,9 +65,33 @@
   </div>
 </main>
 
-<footer>Case opener 3.3 Beta by <b>NotPro1703</b></footer>
+<footer>Case opener 3.4 Beta by <b>NotPro1703</b></footer>
 
-<!-- ============ МОДАЛКА: ИНВЕНТАРЬ ============ -->
+<!-- ПРОФИЛЬ -->
+<div class="modal" id="profileModal">
+  <div class="modal-box">
+    <div class="modal-head"><h2>👤 Профиль</h2><button class="modal-close" id="closeProfile">✕</button></div>
+    <div style="text-align:center; margin-bottom:15px;">
+      <div style="font-size:2rem; font-weight:bold; color:#4da6ff;" id="profName">Игрок</div>
+      <div style="color:#8ba3c7;" id="profLevel">Уровень 1</div>
+    </div>
+    
+    <div class="section-title">Статистика</div>
+    <div class="stats-grid" id="profStats" style="margin-bottom: 15px;"></div>
+
+    <div class="section-title">Достижения</div>
+    <div id="achievementsList" style="max-height:200px; overflow-y:auto; margin-bottom:15px;"></div>
+    <div class="section-title">Квесты</div>
+    <div id="questsList" style="font-size:0.9rem; margin-bottom:15px;"></div>
+    <div class="section-title">🔄 Перерождение</div>
+    <div id="prestigeBox" style="text-align:center; padding:15px; background:rgba(255,215,0,0.1); border:1px solid #ffd700; border-radius:12px;">
+      <div style="font-size:1.2rem; font-weight:bold; color:#ffd700; margin-bottom:10px;">Ваш Престиж: <span id="profPrestige">0</span></div>
+      <button class="btn" id="prestigeBtn" style="background:linear-gradient(145deg, #ffd700, #ff8a00); color:#000;">Переродиться</button>
+    </div>
+  </div>
+</div>
+
+<!-- ИНВЕНТАРЬ -->
 <div class="modal" id="inventoryModal">
   <div class="modal-box">
     <div class="modal-head"><h2>🎒 Инвентарь</h2><button class="modal-close" id="closeInventory">✕</button></div>
@@ -82,7 +104,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: ПЯТНИЦА 13-Е ============ -->
+<!-- ПЯТНИЦА 13-Е -->
 <div class="modal" id="fridayModal">
   <div class="modal-box" style="border:1px solid #ff0000; box-shadow:0 0 20px rgba(255,0,0,0.2);">
     <div class="modal-head"><h2 style="color:#ff6b6b;">🔪 Пятница 13-е</h2><button class="modal-close" id="closeFriday">✕</button></div>
@@ -95,7 +117,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: ШКОЛЬНЫЙ ИВЕНТ ============ -->
+<!-- ШКОЛЬНЫЙ ИВЕНТ -->
 <div class="modal" id="schoolModal">
   <div class="modal-box">
     <div class="modal-head"><h2>📚 Школьный ивент</h2><button class="modal-close" id="closeSchool">✕</button></div>
@@ -111,39 +133,19 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: СТРИК ============ -->
+<!-- СТРИК -->
 <div class="modal" id="streakModal">
   <div class="modal-box" style="text-align:center;">
     <div class="modal-head"><h2>🔥 Ежедневный стрик</h2><button class="modal-close" id="closeStreak">✕</button></div>
     <div style="font-size:3rem; margin:10px 0;" id="streakIcon">📅</div>
     <h3 style="color:#ffd700;" id="streakTitle">День 1</h3>
-    <p style="color:#8ba3c7; font-size:0.9rem; margin-bottom:15px;" id="streakDesc">Заходи каждый день, чтобы получать всё больше денег!</p>
+    <p style="color:#8ba3c7; font-size:0.9rem; margin-bottom:15px;" id="streakDesc">Заходи каждый день!</p>
     <div style="font-size:1.2rem; margin-bottom:15px;">Награда: <b id="streakReward" style="color:#22c55e;">0 ₽</b></div>
     <button class="btn" id="claimStreakBtn" style="background:linear-gradient(145deg, #ff8a00, #e52e71);">Забрать</button>
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: ПРОФИЛЬ ============ -->
-<div class="modal" id="profileModal">
-  <div class="modal-box">
-    <div class="modal-head"><h2>👤 Профиль</h2><button class="modal-close" id="closeProfile">✕</button></div>
-    <div style="text-align:center; margin-bottom:15px;">
-      <div style="font-size:2rem; font-weight:bold; color:#4da6ff;" id="profName">Игрок</div>
-      <div style="color:#8ba3c7;" id="profLevel">Уровень 1</div>
-    </div>
-    <div class="section-title">Достижения</div>
-    <div id="achievementsList" style="max-height:200px; overflow-y:auto; margin-bottom:15px;"></div>
-    <div class="section-title">Квесты</div>
-    <div id="questsList" style="font-size:0.9rem; margin-bottom:15px;"></div>
-    <div class="section-title">🔄 Перерождение</div>
-    <div id="prestigeBox" style="text-align:center; padding:15px; background:rgba(255,215,0,0.1); border:1px solid #ffd700; border-radius:12px;">
-      <div style="font-size:1.2rem; font-weight:bold; color:#ffd700; margin-bottom:10px;">Ваш Престиж: <span id="profPrestige">0</span></div>
-      <button class="btn" id="prestigeBtn" style="background:linear-gradient(145deg, #ffd700, #ff8a00); color:#000;">Переродиться</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ МОДАЛКА: АПГРЕЙДЕР ============ -->
+<!-- АПГРЕЙДЕР -->
 <div class="modal" id="upgradeModal">
   <div class="modal-box">
     <div class="modal-head"><h2>📈 Апгрейдер</h2><button class="modal-close" id="closeUpgrade">✕</button></div>
@@ -168,7 +170,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: КОЛЕСО ============ -->
+<!-- КОЛЕСО -->
 <div class="modal" id="wheelModal">
   <div class="modal-box" style="text-align:center;">
     <div class="modal-head"><h2>🎡 Колесо Фортуны</h2><button class="modal-close" id="closeWheel">✕</button></div>
@@ -179,7 +181,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: КРАФТ ============ -->
+<!-- КРАФТ -->
 <div class="modal" id="craftModal">
   <div class="modal-box">
     <div class="modal-head"><h2>⚒️ Крафт</h2><button class="modal-close" id="closeCraft">✕</button></div>
@@ -191,7 +193,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: КОЛЛЕКЦИЯ ============ -->
+<!-- КОЛЛЕКЦИЯ -->
 <div class="modal" id="collectionModal">
   <div class="modal-box">
     <div class="modal-head"><h2>💼 Коллекция</h2><button class="modal-close" id="closeCollection">✕</button></div>
@@ -199,7 +201,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: СИНДИКАТ ============ -->
+<!-- СИНДИКАТ -->
 <div class="modal" id="syndicateModal">
   <div class="modal-box">
     <div class="modal-head"><h2>🕵️ Синдикат</h2><button class="modal-close" id="closeSyndicate">✕</button></div>
@@ -208,7 +210,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: КЛАНЫ ============ -->
+<!-- КЛАНЫ -->
 <div class="modal" id="clanModal">
   <div class="modal-box">
     <div class="modal-head"><h2>🏰 Кланы</h2><button class="modal-close" id="closeClan">✕</button></div>
@@ -216,7 +218,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: ГЛОБАЛЬНЫЙ ЧАТ ============ -->
+<!-- ГЛОБАЛЬНЫЙ ЧАТ -->
 <div class="modal" id="globalChatModal">
   <div class="modal-box">
     <div class="modal-head"><h2>🌍 Глобальный чат</h2><button class="modal-close" id="closeGlobalChat">✕</button></div>
@@ -228,7 +230,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: КАСТОМИЗАЦИЯ ============ -->
+<!-- КАСТОМИЗАЦИЯ -->
 <div class="modal" id="shopModal">
   <div class="modal-box">
     <div class="modal-head"><h2>🎨 Кастомизация</h2><button class="modal-close" id="closeShop">✕</button></div>
@@ -239,7 +241,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: ТОПЫ ============ -->
+<!-- ТОПЫ -->
 <div class="modal" id="lbModal">
   <div class="modal-box">
     <div class="modal-head"><h2>🏆 Топы</h2><button class="modal-close" id="closeLb">✕</button></div>
@@ -248,7 +250,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: ДРУЗЬЯ ============ -->
+<!-- ДРУЗЬЯ -->
 <div class="modal" id="friendsModal">
   <div class="modal-box">
     <div class="modal-head"><h2>👥 Друзья</h2><button class="modal-close" id="closeFriends">✕</button></div>
@@ -261,7 +263,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: ЧАТ ДРУЗЕЙ ============ -->
+<!-- ЧАТ ДРУЗЕЙ -->
 <div class="modal" id="chatModal">
   <div class="modal-box">
     <div class="modal-head"><h2 id="chatTitle">Чат</h2><button class="modal-close" id="closeChat">✕</button></div>
@@ -273,7 +275,7 @@
   </div>
 </div>
 
-<!-- ============ МОДАЛКА: ПОДАРКИ (деньги) ============ -->
+<!-- ПОДАРКИ (деньги) -->
 <div class="modal" id="giftModal">
   <div class="modal-box">
     <div class="modal-head"><h2>🎁 Подарок</h2><button class="modal-close" id="closeGift">✕</button></div>
@@ -285,7 +287,7 @@
   </div>
 </div>
 
-<!-- ============ РУЛЕТКА ============ -->
+<!-- РУЛЕТКА -->
 <div class="overlay" id="overlay">
   <div class="result-big" id="resultBig"></div>
   <div class="roulette-wrap">
